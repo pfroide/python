@@ -7,10 +7,11 @@
 
 # On importe les librairies dont on aura besoin pour ce tp
 import pandas as pd
+from matplotlib import pyplot as plt
 
 # Valeur limite des Nan acceptée
 # Il faut donc moins de _VALEUR_LIMITE_NAN valeurs "NaN" pour garder la colonne
-_VALEUR_LIMITE_NAN = 230000
+_VALEUR_LIMITE_NAN = 200000
 
 # Référence en y du plot
 _ORDONNEE = "nutrition-score-fr_100g"
@@ -69,22 +70,49 @@ def supprimer_colonnes(data, nom_colonne):
         print("Cette donnée est gardée : elle contient %.0f 'NaN' " % cpt_nan)
 
 def fct_missing_data(data):
-    
+    """
+        Statistiques sur les données manquantes
+    """
     # Compte les données manquantes par colonne
     missing_data = data.isnull().sum(axis=0).reset_index()
-    
+
     # Change les noms des colonnes
     missing_data.columns = ['column_name', 'missing_count']
-    
+
     # Crée une nouvelle colonne et fais le calcul en pourcentage des données
     # manquantes
-    missing_data['filling_factor'] = (data.shape[0]-missing_data['missing_count']) / data.shape[0] * 100
-    
-    # Classe et affiche
-    missing_data.sort_values('filling_factor').reset_index(drop = True)
+    missing_data['fill_fact'] = (data.shape[0]-missing_data['missing_count']) / data.shape[0] * 100
 
-    #
-    print(missing_data)
+    # Classe et affiche
+    print(missing_data.sort_values('fill_fact', ascending=False).reset_index(drop=True))
+
+    # Affichage de la valeur moyenne de données vides
+    print("% fill_fact : ", missing_data['fill_fact'].mean())
+
+def affichage_plot(data, nom_colonne):
+    """
+        Fonction qui permet d'afficher les nuages de points
+    """
+
+    #Log
+    print("Fct affichage_plot : Affichage de la courbe\n")
+
+    # Déliminations du visuel pour x
+    xmax = max(data[nom_colonne])
+    ymax = max(data[_ORDONNEE])
+
+    # Déliminations du visuel pour y
+    xmin = min(data[nom_colonne])
+    ymin = min(data[_ORDONNEE])
+
+    # création du nuage de point avec toujours la même ordonnée
+    data.plot(kind="scatter", x=nom_colonne, y=_ORDONNEE)
+
+    # Affichage
+    plt.grid(True)
+    plt.xlim(xmin, xmax)
+    plt.ylim(ymin, ymax)
+    plt.show()
 
 def main():
     """
@@ -119,7 +147,7 @@ def main():
 
     # Appel de le fonction qui va montrer les données manquantes
     fct_missing_data(data)
-    
+
     # On supprime les lignes qui sont vides et n'ont que des "nan"
     # axis : {0 or ‘index’, 1 or ‘columns’},
     data = data.dropna(axis=1, how='all')
@@ -128,6 +156,36 @@ def main():
     # Suppression des colonnes qui ne remplissent pas les conditions posées
     for i in data:
         supprimer_colonnes(data, i)
+
+    # Trouver le numéro de colonne qui nous sert d'ordonné dans l'affichage
+    position_ordonne = data.columns.get_loc(_ORDONNEE)
+
+    # Affichage des nuages de points avant traitement
+    for i in data.columns.values[0:position_ordonne]:
+        # Log
+        print("Avant traitement")
+        affichage_plot(data, i)
+
+    # Log
+    print("Fct traitement_data : \n")
+
+    for nom_colonne in data.columns.values[0:position_ordonne]:
+        # On garde les valeurs positives
+        data = data[data[nom_colonne] >= 0]
+        # On prends 98% de toutes les valeurs pour couper les grandes valeurs
+        # farfelues
+        data = data[data[nom_colonne] <= data[nom_colonne].quantile(0.98)]
+
+    # Affichage des nuages de points après traitement
+    for i in data.columns.values[0:position_ordonne]:
+        # Log
+        print("Après traitement")
+        affichage_plot(data, i)
+
+    print("\n\nLa base de données est nettoyée.\n\n")
+
+    # Appel de le fonction qui va montrer les données manquantes
+    fct_missing_data(data)
 
     # export csv
     data.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd_clean.csv')
