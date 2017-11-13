@@ -9,13 +9,11 @@
 import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
 import numpy as np
-import sklearn as sk
 from sklearn.ensemble import RandomForestClassifier
-from sklearn import decomposition
 
 # Valeur limite des Nan acceptée
 # Il faut donc moins de _VALEUR_LIMITE_NAN valeurs "NaN" pour garder la colonne
-_VALEUR_LIMITE_NAN = 230000
+_VALEUR_LIMITE_NAN = 200000
 
 # Référence en y du plot
 _ORDONNEE = "nutrition-score-fr_100g"
@@ -29,7 +27,7 @@ _FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd.csv'
 
 def definir_importance(data):
     """
-        Fonction qui permets d'afficher un graphique
+        Fonction qui permet d'afficher un graphique
         où l'on verra l'importance relative de chaque élément dans le calcul
         final
     """
@@ -80,7 +78,7 @@ def definir_importance(data):
 
 def affichage_plot(data, nom_colonne):
     """
-        Fonction qui permets d'afficher les nuages de points
+        Fonction qui permet d'afficher les nuages de points
     """
 
     #Log
@@ -105,7 +103,7 @@ def affichage_plot(data, nom_colonne):
 
 def remplir_colonnes(data, nom_colonne, colonnes):
     """
-        Fonction qui permets de selectionner des colonnes pour la
+        Fonction qui permet de selectionner des colonnes pour la
         base de données
     """
 
@@ -127,7 +125,7 @@ def remplir_colonnes(data, nom_colonne, colonnes):
 
 def supprimer_colonnes(data, nom_colonne):
     """
-        Fonction qui permets de supprimer des colonnes de la bdd
+        Fonction qui permet de supprimer des colonnes de la bdd
     """
 
     # Log
@@ -149,19 +147,19 @@ def supprimer_colonnes(data, nom_colonne):
         # Log
         print("Cette donnée est gardée : elle contient %.0f 'NaN' " % cpt_nan)
 
-def correlation_matrix(df):
+def correlation_matrix(data):
     """
-        Fonction qui permets de créer une visualisation du lien entre les
+        Fonction qui permet de créer une visualisation du lien entre les
         variables 2 à 2
     """
     # Calcule de la matrice
-    corr = df.corr()
+    corr = data.corr()
     cmap = cm.get_cmap('jet', 30)
 
     # Taille de la figure
     plt.figure(figsize=(10, 10))
     # Création du type d'image
-    cax = plt.imshow(df.corr(), interpolation="nearest", cmap=cmap)
+    cax = plt.imshow(data.corr(), interpolation="nearest", cmap=cmap)
     plt.grid(True)
 
     # Libellés sur les axes
@@ -213,9 +211,6 @@ def main():
     data = data.dropna(axis=1, how='all')
     data = data.dropna(how='all')
 
-    # Je garde la description de bdd_data pour information
-    #description = data.describe(include='all')
-
     # Suppression des colonnes qui ne remplissent pas les conditions posées
     for i in data:
         supprimer_colonnes(data, i)
@@ -249,22 +244,11 @@ def main():
 
     print("\n\nLa base de données est nettoyée.\n\n")
 
-    # Utile pour une PCA uniquement
-    data_scale = sk.preprocessing.scale(data)
-
     # Création de la matrice d'importance
     definir_importance(data)
 
     # Création du collérogramme
     correlation_matrix(data)
-    
-    # création de l'objet pca
-    #pca = decomposition.PCA(n_components = 2)
-    #pca = decomposition.PCA()
-    # application de l'objet
-    #pca.fit(temp)
-    #print(pca.explained_variance_ratio_.cumsum())
-    #data2 = pca.transform(temp)
 
 if __name__ == "__main__":
     main()
