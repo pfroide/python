@@ -68,6 +68,24 @@ def supprimer_colonnes(data, nom_colonne):
         # Log
         print("Cette donnée est gardée : elle contient %.0f 'NaN' " % cpt_nan)
 
+def fct_missing_data(data):
+    
+    # Compte les données manquantes par colonne
+    missing_data = data.isnull().sum(axis=0).reset_index()
+    
+    # Change les noms des colonnes
+    missing_data.columns = ['column_name', 'missing_count']
+    
+    # Crée une nouvelle colonne et fais le calcul en pourcentage des données
+    # manquantes
+    missing_data['filling_factor'] = (data.shape[0]-missing_data['missing_count']) / data.shape[0] * 100
+    
+    # Classe et affiche
+    missing_data.sort_values('filling_factor').reset_index(drop = True)
+
+    #
+    print(missing_data)
+
 def main():
     """
         Note : La première colonne et la dernière ont un " caché
@@ -99,13 +117,13 @@ def main():
                        engine='python',
                        sep=r'\t')
 
+    # Appel de le fonction qui va montrer les données manquantes
+    fct_missing_data(data)
+    
     # On supprime les lignes qui sont vides et n'ont que des "nan"
     # axis : {0 or ‘index’, 1 or ‘columns’},
     data = data.dropna(axis=1, how='all')
     data = data.dropna(how='all')
-
-    # Je garde la description de bdd_data pour information
-    #description = data.describe(include='all')
 
     # Suppression des colonnes qui ne remplissent pas les conditions posées
     for i in data:
