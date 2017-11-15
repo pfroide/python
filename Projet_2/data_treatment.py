@@ -10,6 +10,7 @@ import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from sklearn import preprocessing
 
 # Référence en y du plot
 _ORDONNEE = "nutrition-score-fr_100g"
@@ -106,7 +107,7 @@ def main():
                        error_bad_lines=False,
                        engine='python',
                        sep=',')
-    
+
     # On supprime une colonne inutile
     del data['Unnamed: 0']
 
@@ -115,6 +116,57 @@ def main():
 
     # Création du collérogramme
     correlation_matrix(data)
+
+    # Copy de la database initial pour ne pas travailler dessus directement
+    df = data.copy()
+
+    # Création d'une nouvelle colonne en fonction du score de nutrition
+    nom = 'nutrition-score-fr_100g'
+    conditions = [
+        (df[nom] <= -5),
+        (df[nom] > -5) & (df[nom] <= 0),
+        (df[nom] > 0) & (df[nom] <= 10),
+        (df[nom] > 10)]
+    choices = ['Excellent', 'Bon', 'Moyen', 'Mauvais']
+    df['Qualité'] = np.select(conditions, choices)
+
+    # On va scaler les données pour les prochaines colonnes créées
+    min_max_scaler = preprocessing.MinMaxScaler()
+    x_scaled = min_max_scaler.fit_transform(data.values)
+    df2 = pd.DataFrame(x_scaled)
+
+    # On recopie les noms des colonnes
+    df2.columns = data.columns
+
+    # Calculs
+    # Somme des élments positifs
+    # Somme des éléments négatifs
+    # Différence du résultat
+    df2['Positif'] = df2['vitamin-a_100g']+df2['vitamin-c_100g']+df2['fiber_100g']+df2['proteins_100g']
+    df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']
+    df2['Diff'] = df2['Positif']-df2['Negatif']
+
+    # On fait une boucle pour faire les 3 à la suite
+    nom_colonne = ['Positif', 'Negatif', 'Diff']
+    choices = ['Tres Bas', 'Bas', 'Moyen', 'Haut', 'Tres Haut']
+
+    for colonne in nom_colonne:
+        # Valeur max de la colonne
+        value_max = df2[colonne].max()
+
+        # On divise en 5 subsets
+        conditions = [
+            (df2[colonne] <= (value_max)/5),
+            (df2[colonne] > 1*(value_max)/5) & (df2[colonne] <= 2*(value_max)/5),
+            (df2[colonne] > 2*(value_max)/5) & (df2[colonne] <= 3*(value_max)/5),
+            (df2[colonne] > 3*(value_max)/5) & (df2[colonne] <= 4*(value_max)/5),
+            (df2[colonne] > 4*(value_max)/5)]
+
+        # On rajoute la colonne avec la donnée
+        colonne_cible = 'Indice' + colonne[0]
+        df2[colonne_cible] = np.select(conditions, choices)
+
+    print(df2)
 
 if __name__ == "__main__":
     main()
