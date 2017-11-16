@@ -187,5 +187,14 @@ def main():
     # Appel de le fonction qui va montrer les données manquantes
     fct_missing_data(data)
 
+    # Pour rajouter la colonne suivante 
+    data_complet = pd.read_csv(_FICHIER,
+                       error_bad_lines=False,
+                       engine='python',
+                       sep=r'\t')
+
+    # Rajout d'une colonne
+    data['nutrition_grade_fr']=data_complet['nutrition_grade_fr']
+
     # export csv
     data.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd_clean.csv')
