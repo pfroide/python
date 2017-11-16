@@ -7,6 +7,7 @@
 
 # On importe les librairies dont on aura besoin pour ce tp
 import pandas as pd
+import matplotlib.patches as mpatches
 from matplotlib import pyplot as plt, cm as cm
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -16,11 +17,7 @@ from sklearn import preprocessing
 _ORDONNEE = "nutrition-score-fr_100g"
 
 # Lieu où se trouve le FICHIER
-_FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd_clean_v1.csv'
-
-# que faire des données manquantes ?
-# affichage avant/après traitements
-# faire un modèle de prédiction du score nutrionnel (continue/classe)
+_FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd_clean.csv'
 
 def definir_importance(data):
     """
@@ -117,56 +114,120 @@ def main():
     # Création du collérogramme
     correlation_matrix(data)
 
-    # Copy de la database initial pour ne pas travailler dessus directement
-    df = data.copy()
+    # Variables tableaux qui vont être utilisées
+    results = []
+    resultsA = []
+    resultsB = []
+    resultsC = []
+    resultsD = []
+    resultsE = []
 
-    # Création d'une nouvelle colonne en fonction du score de nutrition
-    nom = 'nutrition-score-fr_100g'
-    conditions = [
-        (df[nom] <= -5),
-        (df[nom] > -5) & (df[nom] <= 0),
-        (df[nom] > 0) & (df[nom] <= 10),
-        (df[nom] > 10)]
-    choices = ['Excellent', 'Bon', 'Moyen', 'Mauvais']
-    df['Qualité'] = np.select(conditions, choices)
+    # de i=1 à i+200 avec i=i+1
+    for i in np.arange(10.0, 600.0, 2):
+        # Copy de la database initial pour ne pas travailler dessus directement
+        df = data.copy()
 
-    # On va scaler les données pour les prochaines colonnes créées
-    min_max_scaler = preprocessing.MinMaxScaler()
-    x_scaled = min_max_scaler.fit_transform(data.values)
-    df2 = pd.DataFrame(x_scaled)
+        # Suppresion de la colonne non-chiffre
+        del df['nutrition_grade_fr']
 
-    # On recopie les noms des colonnes
-    df2.columns = data.columns
+        # On va scaler les données pour les prochaines colonnes créées
+        min_max_scaler = preprocessing.MinMaxScaler()
+        x_scaled = min_max_scaler.fit_transform(df.values)
+        df2 = pd.DataFrame(x_scaled)
 
-    # Calculs
-    # Somme des élments positifs
-    # Somme des éléments négatifs
-    # Différence du résultat
-    df2['Positif'] = df2['vitamin-a_100g']+df2['vitamin-c_100g']+df2['fiber_100g']+df2['proteins_100g']
-    df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']
-    df2['Diff'] = df2['Positif']-df2['Negatif']
+        # On recopie les noms des colonnes
+        df2.columns = df.columns
 
-    # On fait une boucle pour faire les 3 à la suite
-    nom_colonne = ['Positif', 'Negatif', 'Diff']
-    choices = ['Tres Bas', 'Bas', 'Moyen', 'Haut', 'Tres Haut']
+        # Calculs
+        # Somme des élments positifs
+        df2['Positif'] = df2['vitamin-a_100g']+df2['vitamin-c_100g']+df2['fiber_100g']+df2['proteins_100g']+df2['iron_100g']
 
-    for colonne in nom_colonne:
-        # Valeur max de la colonne
-        value_max = df2[colonne].max()
+        # Somme des éléments négatifs
+        df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']+df2['saturated-fat_100g']
 
-        # On divise en 5 subsets
-        conditions = [
-            (df2[colonne] <= (value_max)/5),
-            (df2[colonne] > 1*(value_max)/5) & (df2[colonne] <= 2*(value_max)/5),
-            (df2[colonne] > 2*(value_max)/5) & (df2[colonne] <= 3*(value_max)/5),
-            (df2[colonne] > 3*(value_max)/5) & (df2[colonne] <= 4*(value_max)/5),
-            (df2[colonne] > 4*(value_max)/5)]
+        # Différence du résultat
+        df2['Diff'] = (0.01+df2['Positif'])/(0.01+df2['Negatif'])
 
-        # On rajoute la colonne avec la donnée
-        colonne_cible = 'Indice' + colonne[0]
-        df2[colonne_cible] = np.select(conditions, choices)
+        # On fait une boucle pour faire les 3 à la suite
+        nom_colonne = ['Positif', 'Negatif', 'Diff']
+        choices = ['e', 'd', 'c', 'b', 'a']
 
-    print(df2)
+        for colonne in nom_colonne:
+            # Valeur max de la colonne
+            value_max = df2[colonne].max()
+
+            # On divise en 5 subsets
+            conditions = [
+                (df2[colonne] <= (1/i)*(value_max)),
+                (df2[colonne] > (1/i)*(value_max)) & (df2[colonne] <= (2/i)*(value_max)),
+                (df2[colonne] > (2/i)*(value_max)) & (df2[colonne] <= (3/i)*(value_max)),
+                (df2[colonne] > (3/i)*(value_max)) & (df2[colonne] <= (4/i)*(value_max)),
+                (df2[colonne] > (4/i)*(value_max))]
+
+            # On rajoute la colonne avec la donnée
+            colonne_cible = 'Indice' + colonne[0]
+            df2[colonne_cible] = np.select(conditions, choices)
+
+        df['Qualite'] = df2['IndiceD']
+
+        # Rajout de la colonne du nutri score en lettres
+        df['nutrition_grade_fr'] = data['nutrition_grade_fr']
+
+        df['Verdict'] = df['Qualite'] == df['nutrition_grade_fr']
+
+        # Nom de la colonne de référence
+        Reference = 'nutrition_grade_fr'
+
+        # Calcul des scores
+        score = 100 * df['Verdict'].where(df['Verdict'] == True).count()/df['Verdict'].count()
+        results.append(score)
+
+        scoreA = df['Qualite'].where(df['Qualite'] == 'a') == df[Reference].where(df[Reference] == 'a')
+        scoreA = 100 * scoreA.where(scoreA == True).count()/df[Reference].where(df[Reference] == 'a').count()
+        resultsA.append(scoreA)
+
+        scoreB = df['Qualite'].where(df['Qualite'] == 'b') == df[Reference].where(df[Reference] == 'b')
+        scoreB = 100 * scoreB.where(scoreB == True).count()/df[Reference].where(df[Reference] == 'b').count()
+        resultsB.append(scoreB)
+
+        scoreC = df['Qualite'].where(df['Qualite'] == 'c') == df[Reference].where(df[Reference] == 'c')
+        scoreC = 100 * scoreC.where(scoreC == True).count()/df[Reference].where(df[Reference] == 'c').count()
+        resultsC.append(scoreC)
+
+        scoreD = df['Qualite'].where(df['Qualite'] == 'd') == df[Reference].where(df[Reference] == 'd')
+        scoreD = 100 * scoreD.where(scoreD == True).count()/df[Reference].where(df[Reference] == 'd').count()
+        resultsD.append(scoreD)
+
+        scoreE = df['Qualite'].where(df['Qualite'] == 'e') == df[Reference].where(df[Reference] == 'e')
+        scoreE = 100 * scoreE.where(scoreE == True).count()/df[Reference].where(df[Reference] == 'e').count()
+        resultsE.append(scoreE)
+
+        # print('Pour i =', i, '\tBonnes valeurs : ', round(score,3), '%')
+
+    plt.figure(figsize=(12, 8))
+    plt.title('Taux de matchs en fonction de i')
+    plt.plot(np.arange(10.0, 600.0, 2), results)
+    plt.grid('on')
+    plt.savefig("mongraphe.png")
+    plt.show()
+
+    plt.figure(figsize=(12,8))
+    plt.grid('on')
+    plt.title('Rapport des A, B, C, D, E')
+    plt.plot(np.arange(10.0, 600.0, 2), resultsA, color='red')
+    plt.plot(np.arange(10.0, 600.0, 2), resultsB, color='pink')
+    plt.plot(np.arange(10.0, 600.0, 2), resultsC, color='blue')
+    plt.plot(np.arange(10.0, 600.0, 2), resultsD, color='black')
+    plt.plot(np.arange(10.0, 600.0, 2), resultsE, color='green')
+
+    pA = mpatches.Patch(color='red', label='a')
+    pB = mpatches.Patch(color='pink', label='b')
+    pC = mpatches.Patch(color='blue', label='c')
+    pD = mpatches.Patch(color='black', label='d')
+    pE = mpatches.Patch(color='green', label='e')
+
+    plt.legend(handles=[pA,pB,pC,pD,pE])
+    plt.show()
 
 if __name__ == "__main__":
     main()
