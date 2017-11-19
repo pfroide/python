@@ -116,41 +116,45 @@ def main():
 
     # Variables tableaux qui vont être utilisées
     results = []
-    resultsA = []
-    resultsB = []
-    resultsC = []
-    resultsD = []
-    resultsE = []
+    res_a = []
+    res_b = []
+    res_c = []
+    res_d = []
+    res_e = []
 
+    # Taille de l'absicce
+    array_x_plot = np.arange(10.0, 350.0, 2)
+
+    # Copy de la database initial pour ne pas travailler dessus directement
+    df = data.copy()
+
+    # Suppresion de la colonne non-chiffre
+    del df['nutrition_grade_fr']
+
+    # On va scaler les données pour les prochaines colonnes créées
+    min_max_scaler = preprocessing.MinMaxScaler()
+    x_scaled = min_max_scaler.fit_transform(df.values)
+    df2 = pd.DataFrame(x_scaled)
+
+    # On recopie les noms des colonnes
+    df2.columns = df.columns
+
+    # Calculs
+    # Somme des élments positifs
+    df2['Positif'] = df2['vitamin-a_100g']+df2['vitamin-c_100g']+df2['fiber_100g']+df2['proteins_100g']+df2['iron_100g']
+
+    # Somme des éléments négatifs
+    df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']+df2['saturated-fat_100g']
+
+    # Différence du résultat
+    df2['Diff'] = (0.01+df2['Positif'])/(0.01+df2['Negatif'])
+
+    # On fait une boucle pour faire les 3 à la suite
+    nom_colonne = ['Positif', 'Negatif', 'Diff']
+    choices = ['e', 'd', 'c', 'b', 'a']
+        
     # de i=1 à i+200 avec i=i+1
-    for i in np.arange(10.0, 600.0, 2):
-        # Copy de la database initial pour ne pas travailler dessus directement
-        df = data.copy()
-
-        # Suppresion de la colonne non-chiffre
-        del df['nutrition_grade_fr']
-
-        # On va scaler les données pour les prochaines colonnes créées
-        min_max_scaler = preprocessing.MinMaxScaler()
-        x_scaled = min_max_scaler.fit_transform(df.values)
-        df2 = pd.DataFrame(x_scaled)
-
-        # On recopie les noms des colonnes
-        df2.columns = df.columns
-
-        # Calculs
-        # Somme des élments positifs
-        df2['Positif'] = df2['vitamin-a_100g']+df2['vitamin-c_100g']+df2['fiber_100g']+df2['proteins_100g']+df2['iron_100g']
-
-        # Somme des éléments négatifs
-        df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']+df2['saturated-fat_100g']
-
-        # Différence du résultat
-        df2['Diff'] = (0.01+df2['Positif'])/(0.01+df2['Negatif'])
-
-        # On fait une boucle pour faire les 3 à la suite
-        nom_colonne = ['Positif', 'Negatif', 'Diff']
-        choices = ['e', 'd', 'c', 'b', 'a']
+    for i in array_x_plot:
 
         for colonne in nom_colonne:
             # Valeur max de la colonne
@@ -168,67 +172,93 @@ def main():
             colonne_cible = 'Indice' + colonne[0]
             df2[colonne_cible] = np.select(conditions, choices)
 
+        # On recopie une colonne de l'autre dataset
         df['Qualite'] = df2['IndiceD']
 
         # Rajout de la colonne du nutri score en lettres
         df['nutrition_grade_fr'] = data['nutrition_grade_fr']
 
+        # Rajout d'une colonne qui est True/False si les valeurs sont égales
         df['Verdict'] = df['Qualite'] == df['nutrition_grade_fr']
 
         # Nom de la colonne de référence
-        Reference = 'nutrition_grade_fr'
+        ref = 'nutrition_grade_fr'
 
         # Calcul des scores
-        score = 100 * df['Verdict'].where(df['Verdict'] == True).count()/df['Verdict'].count()
+        score = 100 * df['Verdict'].where(df['Verdict']).count()/df['Verdict'].count()
         results.append(score)
 
-        scoreA = df['Qualite'].where(df['Qualite'] == 'a') == df[Reference].where(df[Reference] == 'a')
-        scoreA = 100 * scoreA.where(scoreA == True).count()/df[Reference].where(df[Reference] == 'a').count()
-        resultsA.append(scoreA)
+        s_a = df['Qualite'].where(df['Qualite'] == 'a') == df[ref].where(df[ref] == 'a')
+        s_a = 100 * s_a.where(s_a).count()/df[ref].where(df[ref] == 'a').count()
+        res_a.append(s_a)
 
-        scoreB = df['Qualite'].where(df['Qualite'] == 'b') == df[Reference].where(df[Reference] == 'b')
-        scoreB = 100 * scoreB.where(scoreB == True).count()/df[Reference].where(df[Reference] == 'b').count()
-        resultsB.append(scoreB)
+        s_b = df['Qualite'].where(df['Qualite'] == 'b') == df[ref].where(df[ref] == 'b')
+        s_b = 100 * s_b.where(s_b).count()/df[ref].where(df[ref] == 'b').count()
+        res_b.append(s_b)
 
-        scoreC = df['Qualite'].where(df['Qualite'] == 'c') == df[Reference].where(df[Reference] == 'c')
-        scoreC = 100 * scoreC.where(scoreC == True).count()/df[Reference].where(df[Reference] == 'c').count()
-        resultsC.append(scoreC)
+        s_c = df['Qualite'].where(df['Qualite'] == 'c') == df[ref].where(df[ref] == 'c')
+        s_c = 100 * s_c.where(s_c).count()/df[ref].where(df[ref] == 'c').count()
+        res_c.append(s_c)
 
-        scoreD = df['Qualite'].where(df['Qualite'] == 'd') == df[Reference].where(df[Reference] == 'd')
-        scoreD = 100 * scoreD.where(scoreD == True).count()/df[Reference].where(df[Reference] == 'd').count()
-        resultsD.append(scoreD)
+        s_d = df['Qualite'].where(df['Qualite'] == 'd') == df[ref].where(df[ref] == 'd')
+        s_d = 100 * s_d.where(s_d).count()/df[ref].where(df[ref] == 'd').count()
+        res_d.append(s_d)
 
-        scoreE = df['Qualite'].where(df['Qualite'] == 'e') == df[Reference].where(df[Reference] == 'e')
-        scoreE = 100 * scoreE.where(scoreE == True).count()/df[Reference].where(df[Reference] == 'e').count()
-        resultsE.append(scoreE)
+        s_e = df['Qualite'].where(df['Qualite'] == 'e') == df[ref].where(df[ref] == 'e')
+        s_e = 100 * s_e.where(s_e).count()/df[ref].where(df[ref] == 'e').count()
+        res_e.append(s_e)
 
-        # print('Pour i =', i, '\tBonnes valeurs : ', round(score,3), '%')
+        # print('Pour i =', i, '\tBonnes valeurs : ', round(score, 3), '%')
 
     plt.figure(figsize=(12, 8))
     plt.title('Taux de matchs en fonction de i')
-    plt.plot(np.arange(10.0, 600.0, 2), results)
+    plt.plot(array_x_plot, results)
+
+    # Affichage du max
+    ymax = max(results)
+    xpos = results.index(ymax)
+    xmax = array_x_plot[xpos]
+    plt.annotate(ymax, xy=(xmax, ymax), xytext=(xmax, ymax-5),
+                 arrowprops=dict(facecolor='black', shrink=0.05))
+
     plt.grid('on')
-    plt.savefig("mongraphe.png")
     plt.show()
 
-    plt.figure(figsize=(12,8))
+    plt.figure(figsize=(12, 8))
     plt.grid('on')
     plt.title('Rapport des A, B, C, D, E')
-    plt.plot(np.arange(10.0, 600.0, 2), resultsA, color='red')
-    plt.plot(np.arange(10.0, 600.0, 2), resultsB, color='pink')
-    plt.plot(np.arange(10.0, 600.0, 2), resultsC, color='blue')
-    plt.plot(np.arange(10.0, 600.0, 2), resultsD, color='black')
-    plt.plot(np.arange(10.0, 600.0, 2), resultsE, color='green')
+    plt.plot(array_x_plot, res_a, color='red')
+    plt.plot(array_x_plot, res_b, color='pink')
+    plt.plot(array_x_plot, res_c, color='blue')
+    plt.plot(array_x_plot, res_d, color='black')
+    plt.plot(array_x_plot, res_e, color='green')
 
-    pA = mpatches.Patch(color='red', label='a')
-    pB = mpatches.Patch(color='pink', label='b')
-    pC = mpatches.Patch(color='blue', label='c')
-    pD = mpatches.Patch(color='black', label='d')
-    pE = mpatches.Patch(color='green', label='e')
+    # Création des légendes
+    p_a = mpatches.Patch(color='red', label='a')
+    p_b = mpatches.Patch(color='pink', label='b')
+    p_c = mpatches.Patch(color='blue', label='c')
+    p_d = mpatches.Patch(color='black', label='d')
+    p_e = mpatches.Patch(color='green', label='e')
+    plt.legend(handles=[p_a, p_b, p_c, p_d, p_e])
 
-    plt.legend(handles=[pA,pB,pC,pD,pE])
     plt.show()
 
+    # Création du camembert
+    # Dictionnaire pour décider des bons aliments ou pas
+    dico = {'a': True, 'b': True, 'c' : False, 'd' : False, 'e' : False}
+
+    # Rajout d'une colonne qui est True/False si les aliments sont sains
+    df['Aliment Sain'] = df['Qualite'].map(dico)
+
+    # Visualisation via un camembert
+    data_pie_1 = df['Aliment Sain'].where(df['Aliment Sain']).count()
+    data_pie_2 = df['Aliment Sain'].where(df['Aliment Sain'] == False).count()
+    data_pie = [data_pie_1, data_pie_2]
+    plt.axis('equal')
+    plt.title('Répartition Aliment sain/Aliment pas sain')
+    plt.pie(data_pie, labels=['Sain', 'Pas Sain'], shadow = True, explode = [0, 0.1], autopct='%1.1f%%')
+    plt.show()
+        
 if __name__ == "__main__":
     main()
     
