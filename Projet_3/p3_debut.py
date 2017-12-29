@@ -13,7 +13,12 @@ import json
 
 # Lieu où se trouve le fichier
 Fichier='C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
-DossierTravail='C:\Users\Toni\python\python\Projet_3'
+DossierTravail='C:\\Users\\Toni\\python\\python\\Projet_3'
+
+#__________________________________________________________________
+    # function that extract statistical parameters from a grouby objet:
+def get_stats(gr):
+    return {'min':gr.min(),'max':gr.max(),'count': gr.count(),'mean':gr.mean()}
 
 def count_word(df, ref_col, liste):
     keyword_count = dict()
@@ -30,6 +35,30 @@ def count_word(df, ref_col, liste):
     keyword_occurences.sort(key = lambda x:x[1], reverse = True)
     return keyword_occurences, keyword_count
 
+def afficher_plot(trunc_occurences):
+    
+    words = dict()
+    
+    for s in trunc_occurences:
+        words[s[0]] = s[1]
+    
+    plt.figure(figsize=(15,10))
+    y_axis = [i[1] for i in trunc_occurences]
+    x_axis = [k for k,i in enumerate(trunc_occurences)]
+    x_label = [i[0] for i in trunc_occurences]
+    plt.xticks(rotation=90, fontsize = 10)
+    plt.xticks(x_axis, x_label)
+    
+    plt.yticks(fontsize = 10)
+    plt.ylabel("Nb. of occurences", fontsize = 18, labelpad = 10)
+    
+    plt.bar(x_axis, y_axis, align = 'center', color='b')
+    
+    plt.savefig('C:\\Users\\Toni\\python\\python\\Projet_3\\test2.png', dpi=100)
+    
+    plt.title("Keywords popularity", fontsize = 25)
+    plt.show()
+    
 def main():
     
     # On charge le dataset
@@ -38,16 +67,7 @@ def main():
     print("Données manquantes")
     # nombre de valeurs "NaN"
     # .isnull().sum() = nombre par ligne
-    # .isnull().sum().sum() = nombre total
-# =============================================================================
-#     for nom_colonne in data:
-#         # (df.shape[0] is the number of rows)
-#         # (df.shape[1] is the number of columns)
-#         pcent = 100*(data[nom_colonne].isnull().sum()/data.shape[0])
-#         pcent=round(pcent,2)
-#         print("{} \t {} \t {} %".format(nom_colonne, data[nom_colonne].isnull().sum(), pcent))
-# =============================================================================
-    
+    # .isnull().sum().sum() = nombre total    
     # Compte les données manquantes par colonne
     missing_data = data.isnull().sum(axis=0).reset_index()
     
@@ -61,93 +81,135 @@ def main():
     # Classe et affiche
     missing_data.sort_values('filling_factor').reset_index(drop = True)
     
-    # compter tous les gens différents
-    genre_labels = set()
+    # compter tous les genres différents
+    genre_list = set()
+    
     for s in data['genres'].str.split('|').values:
-        genre_labels = genre_labels.union(set(s))
+        genre_list = genre_list.union(set(s))
     
-    # compter le nombre d'occurence
-    keyword_occurences, dum = count_word(data, 'genres', genre_labels)
-    keyword_occurences[:5]
+    # compter le nombre d'occurence de ces genres
+    genre_list, dum = count_word(data, 'genres', genre_list)
     
-    set_keywords2 = set()
-    for liste_keywords in data['plot_keywords'].str.split('|').values:
-        if isinstance(liste_keywords, float): 
+    # compter les languages
+    language_list = set()
+    
+    for word in data['language'].str.split('|').values:
+        if isinstance(word, float): 
             continue  # only happen if liste_keywords = NaN
-        set_keywords2 = set_keywords2.union(liste_keywords)
-    #_________________________
+        language_list = language_list.union(word)
+    
+    # compter le nombre d'occurence des languages
+    language_list, dum = count_word(data, 'language', language_list)
+    
+    # compter les languages
+    country_list = set()
+    
+    for word in data['country'].str.split('|').values:
+        if isinstance(word, float): 
+            continue  # only happen if liste_keywords = NaN
+        country_list = country_list.union(word)
+    
+    # compter le nombre d'occurence des languages
+    country_list, dum = count_word(data, 'country', country_list)
+    
+    # compter les languages
+    rating_list = set()
+    
+    for word in data['content_rating'].str.split('|').values:
+        if isinstance(word, float): 
+            continue  # only happen if liste_keywords = NaN
+        rating_list = rating_list.union(word)
+    
+    # compter le nombre d'occurence des languages
+    rating_list, dum = count_word(data, 'content_rating', rating_list)
+    
+    # compter tous les mot définissants les films différents
+    keywords_list = set()
+    
+    for word in data['plot_keywords'].str.split('|').values:
+        if isinstance(word, float): 
+            continue  # only happen if liste_keywords = NaN
+        keywords_list = keywords_list.union(word)
+    
     # remove null chain entry
     #set_keywords2.remove('')
 
-    keyword_occurences2, dum = count_word(data, 'plot_keywords', set_keywords2)
-    keyword_occurences2[:5]
+    # en compter le nombre d'occurence
+    keywords_list, dum = count_word(data, 'plot_keywords', keywords_list)
     
-    set_keywords3 = set()
-    for liste_keywords in data['director_name'].str.split('|').values:
-        if isinstance(liste_keywords, float): 
-            continue  # only happen if liste_keywords = NaN
-        set_keywords3 = set_keywords3.union(liste_keywords)
+    # compter tous les directeurs de films
+    directors_list = set()
     
-    keyword_occurences3, dum = count_word(data, 'director_name', set_keywords3)
-    keyword_occurences3[:5]
+    for word in data['director_name'].str.split('|').values:
+        if isinstance(word, float): 
+            continue  # only happen if word = NaN
+        directors_list = directors_list.union(word)
     
-    db_names = []
+    # en compter le nombre d'occurence
+    directors_list, dum = count_word(data, 'director_name', directors_list)
     
+    db_names = []    
     db_names.extend(data['actor_1_name'])
     db_names.extend(data['actor_2_name'])
     db_names.extend(data['actor_3_name'])
     
     df = pd.DataFrame(db_names,columns = ['name'])
-                      
-    #compte = {}.fromkeys(set(db_names),0)
-    #for valeur in db_names:
-    #    compte[valeur] += 1
-#
-    #print(compte)
-    
-    set_keywords4 = set()
-    for liste_keywords in df['name'].str.split('|').values:
-        if isinstance(liste_keywords, float): 
-            continue  # only happen if liste_keywords = NaN
-        set_keywords4 = set_keywords4.union(liste_keywords)
-        
-    keyword_occurences4, dum = count_word(df, 'name', set_keywords4)
-    keyword_occurences4[:10]
-    
-    data['title_year'].describe()
-    data['imdb_score'].describe()
-    data['gross'].describe()
-    
-    words = dict()
-    trunc_occurences = keyword_occurences[0:50]
-    for s in trunc_occurences:
-        words[s[0]] = s[1]
-    
-    plt.figure(figsize=(15,10))
-    y_axis = [i[1] for i in trunc_occurences]
-    x_axis = [k for k,i in enumerate(trunc_occurences)]
-    x_label = [i[0] for i in trunc_occurences]
-    plt.xticks(rotation=90, fontsize = 10)
-    plt.yticks(fontsize = 10)
-    plt.xticks(x_axis, x_label)
-    plt.ylabel("Nb. of occurences", fontsize = 18, labelpad = 10)
-    plt.bar(x_axis, y_axis, align = 'center', color='b')
-    plt.savefig('C:\\Users\\Toni\\python\\python\\Projet_3\\test2.png', dpi=100)
 
-    #_______________________
-    #plt.title("Keywords popularity",bbox={'facecolor':'k', 'pad':5},color='w',fontsize = 25)
-    plt.show()
+    # compter tous les acteurs de films
+    actors_list = set()
     
+    for word in df['name'].str.split('|').values:
+        if isinstance(word, float): 
+            continue  # only happen if liste_keywords = NaN
+        actors_list = actors_list.union(word)
     
-    #data['decade'] = data['title_year'].apply(lambda x:((x-1900)//10)*10)
+    # en compter le nombre d'occurence
+    actors_list, dum = count_word(df, 'name', actors_list)
+
+    afficher_plot(genre_list[0:50])
+    afficher_plot(keywords_list[0:50])
+    afficher_plot(directors_list[0:50])
+    afficher_plot(actors_list[0:50])
+    afficher_plot(language_list[0:50])
+    afficher_plot(country_list[0:50])
+    afficher_plot(rating_list[0:50])
+    
+    # Affichage des décades
     data['decade'] = data['title_year'].apply(lambda x:((x)//10)*10)
     
-    #______________________________________________________________
     # Creation of a dataframe with statitical infos on each decade:
     test = data['title_year'].groupby(data['decade']).apply(get_stats).unstack()
+    
+    sizes = test['count'].values / (data['title_year'].count()) * 100
+    
+    # pour le camembert
+    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    
+    # affichage du camembert
+    plt.pie(sizes, explode=explode, labeldistance=1.2, labels=round(test['min'],0), shadow=False, startangle=0, autopct = lambda x:'{:1.0f}%'.format(x) if x > 5 else '')
+    
+    # Liste des noms complets à analyser
+    Alphabet = []    
+    Alphabet.append('num_critic_for_reviews')    
+    Alphabet.append('num_user_for_reviews')
+    Alphabet.append('duration')
+    Alphabet.append('gross')
+    Alphabet.append('budget')
+    Alphabet.append('imdb_score')
+    Alphabet.append('movie_facebook_likes')
+    Alphabet.append('cast_total_facebook_likes')
+    Alphabet.append('num_voted_users')
 
-    plt.pie(data['decade'])
-#__________________________________________________________________
-    # function that extract statistical parameters from a grouby objet:
-def get_stats(gr):
-    return {'min':gr.min(),'max':gr.max(),'count': gr.count(),'mean':gr.mean()}
+    
+     # Affichage des imdb_score par 10
+    data['imdb_score10'] = data['imdb_score'].apply(lambda x:round(x,0))
+    
+    # Creation of a dataframe with statitical infos on each decade:
+    test = data['imdb_score'].groupby(data['imdb_score10']).apply(get_stats).unstack()
+    sizes = test['count'].values / (data['imdb_score'].count()) * 100
+    
+    # pour le camembert
+    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    
+    # affichage du camembert
+    plt.pie(sizes, explode=explode, labeldistance=1.2, labels=round(test['min'],0), shadow=False, startangle=0, autopct = lambda x:'{:1.0f}%'.format(x) if x > 5 else '')
