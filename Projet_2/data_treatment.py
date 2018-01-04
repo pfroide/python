@@ -12,12 +12,16 @@ from matplotlib import pyplot as plt, cm as cm
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import preprocessing
+from sklearn import linear_model
 
 # Référence en y du plot
 _ORDONNEE = "nutrition-score-fr_100g"
 
 # Lieu où se trouve le FICHIER
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd_clean.csv'
+
+# Lieu de sauvegarde
+_DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_2'
 
 def definir_importance(data):
     """
@@ -70,6 +74,32 @@ def definir_importance(data):
     # Show the plot
     plt.show()
 
+def regression_lineaire(data, colon1, colon2):
+    """
+        Fonction pour le calcul des régressions linéaires
+    """
+
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'regression_' + colon1 + '_' + colon2
+
+    # Calcul de la droite optimale
+    regr = linear_model.LinearRegression()
+    regr.fit(data[colon1].values.reshape(-1, 1), data[colon2].values.reshape(-1, 1))
+
+    # Affichage de la variances : On doit être le plus proche possible de 1
+    print('Regression sur les deux colonnes :', colon1, colon2)
+    print('Score : %.2f' % np.corrcoef(data[colon1], data[colon2])[1, 0])
+
+    #plt.plot(data[colon1], data[colon2],'ro', markersize=3)
+
+# =============================================================================
+#     # Affichage de la droite optimale
+#     plt.plot([0, 1], [regr.intercept_, regr.intercept_ + 200*regr.coef_])
+#     plt.legend()
+#     plt.savefig(fichier_save, dpi=100)
+#     plt.show()
+#
+# =============================================================================
+
 def correlation_matrix(data):
     """
         Fonction qui permet de créer une visualisation du lien entre les
@@ -86,13 +116,46 @@ def correlation_matrix(data):
     plt.grid(True)
 
     # Libellés sur les axes
-    plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)
-    plt.yticks(range(len(corr.columns)), corr.columns)
+    plt.xticks(range(len(corr.columns)), corr.columns, rotation=90, fontsize=15)
+    plt.yticks(range(len(corr.columns)), corr.columns, fontsize=15)
 
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
     plt.colorbar(cax, ticks=[-0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])
     plt.show()
 
+def histogramme(data, colon):
+    """
+        Note : La première colonne et la dernière ont un " caché
+    """
+
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'histogram_' + colon
+
+    steps = (max(data[colon])-min(data[colon]))/100
+    bin_values = np.arange(start=min(data[colon]), stop=max(data[colon]), step=steps)
+    plt.figure(figsize=(14, 6))
+    plt.xlabel('Valeurs')
+    plt.ylabel('Décompte')
+    titre = 'Histogramme ' + colon
+    plt.title(titre)
+    plt.hist(data[colon], bins=bin_values)
+    plt.savefig(fichier_save, dpi=100)
+
+def sanite(df, dico, nb_sain):
+    """
+        TBD
+    """
+        # Rajout d'une colonne qui est True/False si les aliments sont sains
+    df['Aliment Sain'] = df['Qualite'].map(dico)
+
+    # Visualisation via un camembert
+    data_pie_1 = df['Aliment Sain'].where(df['Aliment Sain']).count()
+    data_pie_2 = df['Aliment Sain'].where(df['Aliment Sain'] == False).count()
+    data_pie = [data_pie_1, data_pie_2]
+    plt.axis('equal')
+    plt.title('Répartition Aliment sain/Aliment pas sain pour nb_sain = ', nb_sain)
+    plt.pie(data_pie, labels=['Sain', 'Pas Sain'], shadow=True, explode=[0, 0.1], autopct='%1.1f%%')
+    plt.show()
+    
 def main():
     """
         Note : La première colonne et la dernière ont un " caché
@@ -108,11 +171,24 @@ def main():
     # On supprime une colonne inutile
     del data['Unnamed: 0']
 
-    # Création de la matrice d'importance
-    definir_importance(data)
+    # Création des histogrammes
+    for colon in data:
+        if colon != 'nutrition_grade_fr':
+            histogramme(data, colon)
 
     # Création du collérogramme
     correlation_matrix(data)
+
+    # Création des régressions linéaires
+    for colon in data:
+        if colon != 'nutrition_grade_fr' and colon != 'nutrition-score-fr_100g':
+            regression_lineaire(data, 'nutrition-score-fr_100g', colon)
+
+    regression_lineaire(data, 'energy_100g', 'fat_100g')
+    regression_lineaire(data, 'energy_100g', 'fiber_100g')
+    regression_lineaire(data, 'fat_100g', 'saturated-fat_100g')
+    regression_lineaire(data, 'sugars_100g', 'salt_100g')
+    regression_lineaire(data, 'proteins_100g', 'calcium_100g')
 
     # Variables tableaux qui vont être utilisées
     results = []
@@ -121,9 +197,6 @@ def main():
     res_c = []
     res_d = []
     res_e = []
-
-    # Taille de l'absicce
-    array_x_plot = np.arange(10.0, 350.0, 2)
 
     # Copy de la database initial pour ne pas travailler dessus directement
     df = data.copy()
@@ -148,11 +221,14 @@ def main():
 
     # Différence du résultat
     df2['Diff'] = (0.01+df2['Positif'])/(0.01+df2['Negatif'])
-
+        
     # On fait une boucle pour faire les 3 à la suite
     nom_colonne = ['Positif', 'Negatif', 'Diff']
     choices = ['e', 'd', 'c', 'b', 'a']
-        
+
+    # Taille de l'absicce
+    array_x_plot = np.arange(10.0, 300.0, 2)
+    
     # de i=1 à i+200 avec i=i+1
     for i in array_x_plot:
 
@@ -244,21 +320,17 @@ def main():
     plt.show()
 
     # Création du camembert
+    # 3 cas possibles
     # Dictionnaire pour décider des bons aliments ou pas
+    dico = {'a': True, 'b': False, 'c' : False, 'd' : False, 'e' : False}
+    sanite(df, dico, 1)
+    
     dico = {'a': True, 'b': True, 'c' : False, 'd' : False, 'e' : False}
+    sanite(df, dico, 2)
+    
+    dico = {'a': True, 'b': True, 'c' : True, 'd' : False, 'e' : False}
+    sanite(df, dico, 3)
 
-    # Rajout d'une colonne qui est True/False si les aliments sont sains
-    df['Aliment Sain'] = df['Qualite'].map(dico)
-
-    # Visualisation via un camembert
-    data_pie_1 = df['Aliment Sain'].where(df['Aliment Sain']).count()
-    data_pie_2 = df['Aliment Sain'].where(df['Aliment Sain'] == False).count()
-    data_pie = [data_pie_1, data_pie_2]
-    plt.axis('equal')
-    plt.title('Répartition Aliment sain/Aliment pas sain')
-    plt.pie(data_pie, labels=['Sain', 'Pas Sain'], shadow = True, explode = [0, 0.1], autopct='%1.1f%%')
-    plt.show()
-        
 if __name__ == "__main__":
     main()
     
