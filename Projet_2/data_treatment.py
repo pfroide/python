@@ -21,7 +21,7 @@ _ORDONNEE = "nutrition-score-fr_100g"
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\bdd_clean.csv'
 
 # Lieu de sauvegarde
-_DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_2'
+_DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_2\\images'
 
 def definir_importance(data):
     """
@@ -79,7 +79,7 @@ def regression_lineaire(data, colon1, colon2):
         Fonction pour le calcul des régressions linéaires
     """
 
-    fichier_save = _DOSSIERTRAVAIL + '\\' + 'regression_' + colon1 + '_' + colon2
+    ##fichier_save = _DOSSIERTRAVAIL + '\\' + 'regression_' + colon1 + '_' + colon2
 
     # Calcul de la droite optimale
     regr = linear_model.LinearRegression()
@@ -89,22 +89,21 @@ def regression_lineaire(data, colon1, colon2):
     print('Regression sur les deux colonnes :', colon1, colon2)
     print('Score : %.2f' % np.corrcoef(data[colon1], data[colon2])[1, 0])
 
-    #plt.plot(data[colon1], data[colon2],'ro', markersize=3)
-
-# =============================================================================
-#     # Affichage de la droite optimale
-#     plt.plot([0, 1], [regr.intercept_, regr.intercept_ + 200*regr.coef_])
-#     plt.legend()
-#     plt.savefig(fichier_save, dpi=100)
-#     plt.show()
-#
-# =============================================================================
+    # Affichage de la droite optimale)
+    # plt.plot([0, 200], [regr.intercept_, regr.intercept_ + 200*regr.coef_],
+    # linewidth=2.0, label=regr.coef_)
+    # plt.plot(data[colon1], data[colon2],'ro', markersize=1)
+    # plt.legend()
+    # plt.savefig(fichier_save, dpi=100)
+    # plt.show()
 
 def correlation_matrix(data):
     """
         Fonction qui permet de créer une visualisation du lien entre les
         variables 2 à 2
     """
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'cor_matrix_'
+    
     # Calcule de la matrice
     corr = data.corr()
     cmap = cm.get_cmap('jet', 30)
@@ -121,6 +120,7 @@ def correlation_matrix(data):
 
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
     plt.colorbar(cax, ticks=[-0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])
+    plt.savefig(fichier_save, bbox_inches='tight')
     plt.show()
 
 def histogramme(data, colon):
@@ -132,7 +132,7 @@ def histogramme(data, colon):
 
     steps = (max(data[colon])-min(data[colon]))/100
     bin_values = np.arange(start=min(data[colon]), stop=max(data[colon]), step=steps)
-    plt.figure(figsize=(14, 6))
+    plt.figure(figsize=(10, 6))
     plt.xlabel('Valeurs')
     plt.ylabel('Décompte')
     titre = 'Histogramme ' + colon
@@ -152,10 +152,11 @@ def sanite(df, dico, nb_sain):
     data_pie_2 = df['Aliment Sain'].where(df['Aliment Sain'] == False).count()
     data_pie = [data_pie_1, data_pie_2]
     plt.axis('equal')
-    plt.title('Répartition Aliment sain/Aliment pas sain pour nb_sain = ', nb_sain)
+    Titre = 'Répartition Aliment sain/Aliment pas sain pour nb_sain = %s ' % nb_sain
+    plt.title(Titre)
     plt.pie(data_pie, labels=['Sain', 'Pas Sain'], shadow=True, explode=[0, 0.1], autopct='%1.1f%%')
     plt.show()
-    
+
 def main():
     """
         Note : La première colonne et la dernière ont un " caché
@@ -171,6 +172,12 @@ def main():
     # On supprime une colonne inutile
     del data['Unnamed: 0']
 
+    # Transposition du dataframe de données pour l'abalyse univariée
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'transposition.csv'
+    data_transpose = data.describe().reset_index().transpose()
+    print (data_transpose)
+    data_transpose.to_csv(fichier_save)
+
     # Création des histogrammes
     for colon in data:
         if colon != 'nutrition_grade_fr':
@@ -184,6 +191,7 @@ def main():
         if colon != 'nutrition_grade_fr' and colon != 'nutrition-score-fr_100g':
             regression_lineaire(data, 'nutrition-score-fr_100g', colon)
 
+    # Autres régressions intéressantes
     regression_lineaire(data, 'energy_100g', 'fat_100g')
     regression_lineaire(data, 'energy_100g', 'fiber_100g')
     regression_lineaire(data, 'fat_100g', 'saturated-fat_100g')
@@ -217,18 +225,18 @@ def main():
     df2['Positif'] = df2['vitamin-a_100g']+df2['vitamin-c_100g']+df2['fiber_100g']+df2['proteins_100g']+df2['iron_100g']
 
     # Somme des éléments négatifs
-    df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']+df2['saturated-fat_100g']
+    df2['Negatif'] = df2['sugars_100g']+df2['salt_100g']+df2['energy_100g']+df2['fat_100g']
 
     # Différence du résultat
     df2['Diff'] = (0.01+df2['Positif'])/(0.01+df2['Negatif'])
-        
+
     # On fait une boucle pour faire les 3 à la suite
     nom_colonne = ['Positif', 'Negatif', 'Diff']
     choices = ['e', 'd', 'c', 'b', 'a']
 
     # Taille de l'absicce
     array_x_plot = np.arange(10.0, 300.0, 2)
-    
+
     # de i=1 à i+200 avec i=i+1
     for i in array_x_plot:
 
@@ -324,10 +332,10 @@ def main():
     # Dictionnaire pour décider des bons aliments ou pas
     dico = {'a': True, 'b': False, 'c' : False, 'd' : False, 'e' : False}
     sanite(df, dico, 1)
-    
+
     dico = {'a': True, 'b': True, 'c' : False, 'd' : False, 'e' : False}
     sanite(df, dico, 2)
-    
+
     dico = {'a': True, 'b': True, 'c' : True, 'd' : False, 'e' : False}
     sanite(df, dico, 3)
 

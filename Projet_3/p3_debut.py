@@ -9,7 +9,8 @@ Ceci est un script temporaire.
 import json
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt, cm as cm
+from sklearn import linear_model
 
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
@@ -92,6 +93,29 @@ def comptabiliser(data, valeur_cherchee):
 
     return listing
 
+def correlation_matrix(data):
+    """
+        Fonction qui permet de créer une visualisation du lien entre les
+        variables 2 à 2
+    """
+    # Calcule de la matrice
+    corr = data.corr()
+    cmap = cm.get_cmap('jet', 30)
+
+    # Taille de la figure
+    plt.figure(figsize=(10, 10))
+    # Création du type d'image
+    cax = plt.imshow(data.corr(), interpolation="nearest", cmap=cmap)
+    plt.grid(True)
+
+    # Libellés sur les axes
+    plt.xticks(range(len(corr.columns)), corr.columns, rotation=90, fontsize=15)
+    plt.yticks(range(len(corr.columns)), corr.columns, fontsize=15)
+
+    # Add colorbar, make sure to specify tick locations to match desired ticklabels
+    plt.colorbar(cax, ticks=[-0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])
+    plt.show()
+    
 def main():
     """
     TBD
@@ -115,6 +139,34 @@ def main():
 
     # Classe et affiche
     missing_data.sort_values('filling_factor').reset_index(drop=True)
+
+    # Transposition du dataframe de données pour l'abalyse univariée
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'transposition.csv'
+    data_transpose = data.describe().reset_index().transpose()
+    print (data_transpose)
+    #data_transpose.to_csv(fichier_save)
+    
+    # Matrice de correlation
+    correlation_matrix(data)
+    
+    data.fillna(0, inplace=True)
+    
+    regression = []
+    
+    colon1 = 'gross'
+    
+    for nom_colonne in data:    
+        colon2 = nom_colonne
+
+        if (data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64') and colon2 != 'gross' :
+            # Calcul d'une regression linéaire
+            regr = linear_model.LinearRegression()
+            regr.fit(data[colon1].values.reshape(-1, 1), data[colon2].values.reshape(-1, 1))
+        
+            # Affichage de la variances : On doit être le plus proche possible de 1
+            print('Regression sur les deux colonnes :', colon1, colon2)
+            print('Score : %.2f' % np.corrcoef(data[colon1], data[colon2])[1, 0])
+            regression.append(np.corrcoef(data[colon1], data[colon2])[1, 0])
 
     # Création de la database avec tous les noms d'acteurs car ils sont sur
     # 3 colonnes différentes
@@ -163,7 +215,8 @@ def main():
     sizes = test['count'].values / (data['title_year'].count()) * 100
 
     # pour le camembert
-    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    # Attention car y'a aussi ceux qui n'ont pas de dates.
+    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 
     # affichage du camembert
     plt.pie(sizes,
