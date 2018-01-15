@@ -84,10 +84,12 @@ def regression_lineaire(data, colon1, colon2):
     # Calcul de la droite optimale
     regr = linear_model.LinearRegression()
     regr.fit(data[colon1].values.reshape(-1, 1), data[colon2].values.reshape(-1, 1))
+    score = np.corrcoef(data[colon1], data[colon2])[1, 0]
 
     # Affichage de la variances : On doit être le plus proche possible de 1
-    print('Regression sur les deux colonnes :', colon1, colon2)
-    print('Score : %.2f' % np.corrcoef(data[colon1], data[colon2])[1, 0])
+    if score > 0.5:
+        print('Régression sur les deux données :', colon1, "et", colon2)
+        print('Score : %.2f' % score)
 
     # Affichage de la droite optimale)
     # plt.plot([0, 200], [regr.intercept_, regr.intercept_ + 200*regr.coef_],
