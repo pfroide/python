@@ -11,10 +11,14 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
 from sklearn import linear_model
-
+from sklearn.cluster import KMeans
+from sklearn import cluster, metrics, manifold
+from sklearn import preprocessing
+from sklearn import decomposition
+    
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
-_DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_3'
+_DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_3\\images'
 
 # function that extract statistical parameters from a grouby objet
 def get_stats(param):
@@ -32,8 +36,10 @@ def count_word(data, ref_col, liste):
     TBD
     """
     keyword_count = dict()
+    
     for s in liste:
         keyword_count[s] = 0
+    
     for liste_keywords in data[ref_col].str.split('|'):
         if isinstance(liste_keywords, float) and pd.isnull(liste_keywords):
             continue
@@ -43,9 +49,12 @@ def count_word(data, ref_col, liste):
 
     # convert the dictionary in a list to sort the keywords by frequency
     keyword_occurences = []
+    
     for k, v in keyword_count.items():
         keyword_occurences.append([k, v])
+    
     keyword_occurences.sort(key=lambda x: x[1], reverse=True)
+    
     return keyword_occurences, keyword_count
 
 def afficher_plot(type_donnee, trunc_occurences):
@@ -87,11 +96,11 @@ def comptabiliser(data, valeur_cherchee):
         if isinstance(word, float):
             continue
         listing = listing.union(word)
-
+    
     # compter le nombre d'occurence de ces genres
-    listing, dum = count_word(data, valeur_cherchee, listing)
+    listing_compte, dum = count_word(data, valeur_cherchee, listing)
 
-    return listing
+    return listing_compte
 
 def correlation_matrix(data):
     """
@@ -115,7 +124,72 @@ def correlation_matrix(data):
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
     plt.colorbar(cax, ticks=[-0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])
     plt.show()
+
+def transpose_bool(data):
     
+    # énumaration des genres
+    listing = comptabiliser(data, 'genres')
+    
+    for mot, compte in listing:
+        data[mot] = pd.Series(((1 if mot in data['genres'][i] else 0) for i in range(5043)), index=data.index)
+    
+    # On supprime les #NA
+    data['plot_keywords'].fillna('vide', inplace=True)
+    
+    # énumaration des mot-clefs
+    listing = comptabiliser(data, 'plot_keywords')
+    
+    for mot, compte in listing:
+        if compte > 30:
+            data[mot] = pd.Series(((1 if mot in data['plot_keywords'][i] else 0) for i in range(5043)), index=data.index)
+    
+    # Suppression de la colonne "vide"
+    del data['vide']
+    
+def affichage(data):
+    
+    # Suprresion de ce qui n'est pas chiffré
+    datanum = data.copy()
+    datanum = datanum.drop(['color', 'director_name', 'actor_1_name', 'genres', 'movie_title', 'actor_2_name', 'actor_3_name'], axis=1)
+    datanum = datanum.drop(['plot_keywords', 'movie_imdb_link', 'language', 'country', 'content_rating'], axis=1)
+
+    # Suppresion des NA
+    datanum.fillna(0, inplace=True)
+
+    # Scale des données obligatoire avant la réduction des dimensions
+    std_scale = preprocessing.StandardScaler().fit(datanum)
+    X_scaled = std_scale.transform(datanum)
+    
+    # Réduction t-Sne
+    print("Computing t-SNE embedding")
+    tsne = manifold.TSNE(n_components=2, perplexity=40, n_iter=300)
+    
+    for i in range(50,51):
+        # On fait i clusters avec les données scalées.
+        kmeans = KMeans(n_clusters=i)
+        kmeans.fit(X_scaled)
+        # Nouvelle colonne avec les conclusions de kmeans
+        datanum['labels'] = kmeans.labels_
+    
+        # perform t-SNE embedding
+        x_tsne = tsne.fit_transform(X_scaled)
+
+        # plot the result
+        vis_x = x_tsne[:, 0]
+        vis_y = x_tsne[:, 1]
+    
+        # figure de prédiction
+        plt.figure(figsize=(10, 6))
+        plt.scatter(vis_x, vis_y, c=datanum['labels'], cmap=plt.cm.get_cmap("jet", i))
+        plt.colorbar(ticks=range(i))
+        plt.grid('on')
+        Titre = 'Affichage du clustering déduit par le Kmeans n=%s ' % i
+        plt.title(Titre)
+        plt.show()
+    
+    # On remets les titres pour y voir plus clair
+    datanum['movie_title'] = data['movie_title']
+
 def main():
     """
     TBD
@@ -144,7 +218,7 @@ def main():
     fichier_save = _DOSSIERTRAVAIL + '\\' + 'transposition.csv'
     data_transpose = data.describe().reset_index().transpose()
     print (data_transpose)
-    #data_transpose.to_csv(fichier_save)
+    data_transpose.to_csv(fichier_save)
     
     # Matrice de correlation
     correlation_matrix(data)
@@ -205,6 +279,59 @@ def main():
     afficher_plot('languages', language_list[0:50])
     afficher_plot('countrys', country_list[0:50])
     afficher_plot('ratings', rating_list[0:50])
+
+    std_scale = preprocessing.StandardScaler().fit(datanum)
+    X_scaled = std_scale.transform(datanum)
+
+
+
+    
+
+    pca = decomposition.PCA(n_components=5)
+    pca.fit(X_scaled)
+
+    print(pca.explained_variance_ratio_)
+    print(pca.explained_variance_ratio_.sum())
+
+    # projeter X sur les composantes principales
+    X_projected = pca.transform(X_scaled)
+
+    import matplotlib.cm as cm
+    m = cm.ScalarMappable(cmap=cm.jet)
+    m.set_array(X_projected)
+    plt.colorbar(m)
+    
+    # afficher chaque observation
+    plt.scatter(X_projected[:, 0], X_projected[:, 1], c=data.get('imbd_score'))
+    #plt.xlim([-5.5, 5.5])
+    #plt.ylim([-4, 4])
+    plt.colorbar(m)
+
+    # Pour mieux comprendre ce que capture ces composantes principales, 
+    # nous pouvons utiliser pca.components_, qui nous donne les coordonnées 
+    # des composantes principales dans l'espace initial (celui à 10 variables).
+    # Nous allons afficher, pour chacune des 10 performances, 
+    # un point dont l'abscisse sera sa contribution à la première PC 
+    #   et l'ordonnée sa contribution à la deuxième PC.
+    pcs = pca.components_
+    
+    for i, (x, y) in enumerate(zip(pcs[0, :], pcs[1, :])):
+        # Afficher un segment de l'origine au point (x, y)
+        plt.plot([0, x], [0, y], color='k')
+        # Afficher le nom (data.columns[i]) de la performance
+        plt.text(x, y, data.columns[i], fontsize='8')
+    
+    # Afficher une ligne horizontale y=0
+    plt.plot([-0.7, 0.7], [0, 0], color='grey', ls='--')
+    
+    # Afficher une ligne verticale x=0
+    plt.plot([0, 0], [-0.7, 0.7], color='grey', ls='--')
+    
+    plt.xlim([-0.7, 0.7])
+    plt.ylim([-0.7, 0.7])
+
+
+
 
     # Affichage des décades
     data['decade'] = data['title_year'].apply(lambda x: ((x)//10)*10)
