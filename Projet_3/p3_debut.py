@@ -6,15 +6,21 @@ Ceci est un script temporaire.
 """
 
 # On importe les librairies dont on aura besoin pour ce tp
-import json
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
 from sklearn import linear_model
 from sklearn.cluster import KMeans
 from sklearn import cluster, metrics, manifold
+from sklearn.neighbors import NearestNeighbors
 from sklearn import preprocessing
 from sklearn import decomposition
+
+# =============================================================================
+# Après le mentorat de Thierry :
+# Voir si les fonctions que j'ai prises sur kaggle ne sont pas de trop.
+# Ne pas prendre en compte dans un premier temps les mots-clefs car trop nombreux.
+# =============================================================================
     
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
@@ -145,8 +151,39 @@ def transpose_bool(data):
     
     # Suppression de la colonne "vide"
     del data['vide']
-    
-def affichage(data):
+
+#def affichage_nearest_neighbours(data, nom_film):
+#
+#     # Suprresion de ce qui n'est pas chiffré
+#    datanum = data.copy()
+#    datanum = datanum.drop(['color', 'director_name', 'actor_1_name', 'genres', 'movie_title', 'actor_2_name', 'actor_3_name'], axis=1)
+#    datanum = datanum.drop(['plot_keywords', 'movie_imdb_link', 'language', 'country', 'content_rating'], axis=1)
+#
+#    # Suppresion des NA
+#    datanum.fillna(0, inplace=True)
+#
+##    # Scale des données obligatoire avant la réduction des dimensions
+##    std_scale = preprocessing.StandardScaler().fit(datanum)
+##    X_scaled = std_scale.transform(datanum)
+##    
+##    # Réduction t-Sne
+##    print("Computing t-SNE embedding")
+##    tsne = manifold.TSNE(n_components=2, perplexity=50, n_iter=500)
+##    
+##    nbrs = NearestNeighbors(n_neighbors=31, algorithm='auto', metric='euclidean').fit(datanum)    
+##    distances, indices = nbrs.kneighbors(datanum)
+#    
+#    
+#    #X = df_new.as_matrix(datanum)
+#    X = datanum
+#    nbrs = NearestNeighbors(n_neighbors=2, algorithm='auto', metric='euclidean').fit(X)
+#
+#    distances, indices = nbrs.kneighbors(X) 
+#
+#    print(distances)
+#    print(indices)
+
+def affichage_kmeans(data):
     
     # Suprresion de ce qui n'est pas chiffré
     datanum = data.copy()
@@ -162,7 +199,7 @@ def affichage(data):
     
     # Réduction t-Sne
     print("Computing t-SNE embedding")
-    tsne = manifold.TSNE(n_components=2, perplexity=40, n_iter=300)
+    tsne = manifold.TSNE(n_components=2, perplexity=50, n_iter=500)
     
     for i in range(50,51):
         # On fait i clusters avec les données scalées.
@@ -283,127 +320,123 @@ def main():
     std_scale = preprocessing.StandardScaler().fit(datanum)
     X_scaled = std_scale.transform(datanum)
 
-
-
-    
-
-    pca = decomposition.PCA(n_components=5)
-    pca.fit(X_scaled)
-
-    print(pca.explained_variance_ratio_)
-    print(pca.explained_variance_ratio_.sum())
-
-    # projeter X sur les composantes principales
-    X_projected = pca.transform(X_scaled)
-
-    import matplotlib.cm as cm
-    m = cm.ScalarMappable(cmap=cm.jet)
-    m.set_array(X_projected)
-    plt.colorbar(m)
-    
-    # afficher chaque observation
-    plt.scatter(X_projected[:, 0], X_projected[:, 1], c=data.get('imbd_score'))
-    #plt.xlim([-5.5, 5.5])
-    #plt.ylim([-4, 4])
-    plt.colorbar(m)
-
-    # Pour mieux comprendre ce que capture ces composantes principales, 
-    # nous pouvons utiliser pca.components_, qui nous donne les coordonnées 
-    # des composantes principales dans l'espace initial (celui à 10 variables).
-    # Nous allons afficher, pour chacune des 10 performances, 
-    # un point dont l'abscisse sera sa contribution à la première PC 
-    #   et l'ordonnée sa contribution à la deuxième PC.
-    pcs = pca.components_
-    
-    for i, (x, y) in enumerate(zip(pcs[0, :], pcs[1, :])):
-        # Afficher un segment de l'origine au point (x, y)
-        plt.plot([0, x], [0, y], color='k')
-        # Afficher le nom (data.columns[i]) de la performance
-        plt.text(x, y, data.columns[i], fontsize='8')
-    
-    # Afficher une ligne horizontale y=0
-    plt.plot([-0.7, 0.7], [0, 0], color='grey', ls='--')
-    
-    # Afficher une ligne verticale x=0
-    plt.plot([0, 0], [-0.7, 0.7], color='grey', ls='--')
-    
-    plt.xlim([-0.7, 0.7])
-    plt.ylim([-0.7, 0.7])
-
-
-
-
-    # Affichage des décades
-    data['decade'] = data['title_year'].apply(lambda x: ((x)//10)*10)
-
-    # Creation of a dataframe with statitical infos on each decade:
-    test = data['title_year'].groupby(data['decade']).apply(get_stats).unstack()
-
-    sizes = test['count'].values / (data['title_year'].count()) * 100
-
-    # pour le camembert
-    # Attention car y'a aussi ceux qui n'ont pas de dates.
-    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-
-    # affichage du camembert
-    plt.pie(sizes,
-            explode=explode,
-            labeldistance=1.2,
-            labels=round(test['min'], 0),
-            shadow=False,
-            startangle=0,
-            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
-
-    # Liste des noms complets à analyser
-    alphabet = []
-    alphabet.append('num_critic_for_reviews')
-    alphabet.append('num_user_for_reviews')
-    alphabet.append('duration')
-    alphabet.append('gross')
-    alphabet.append('budget')
-    alphabet.append('imdb_score')
-    alphabet.append('movie_facebook_likes')
-    alphabet.append('cast_total_facebook_likes')
-    alphabet.append('num_voted_users')
-
-     # Affichage des imdb_score par 10
-    data['imdb_score10'] = data['imdb_score'].apply(lambda x: round(x, 0))
-
-    # Creation of a dataframe with statitical infos on each decade:
-    test = data['imdb_score'].groupby(data['imdb_score10']).apply(get_stats).unstack()
-    sizes = test['count'].values / (data['imdb_score'].count()) * 100
-
-    # pour le camembert
-    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-
-    # affichage du camembert
-    plt.pie(sizes,
-            explode=explode,
-            labeldistance=1.2,
-            labels=round(test['min'], 0),
-            shadow=False,
-            startangle=0,
-            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
-
-
-    data['budget10'] = data['budget'].apply(lambda x: ((x)//1000000))
-
-    # Creation of a dataframe with statitical infos on each decade:
-    test = data['budget'].groupby(data['budget10']).apply(get_stats).unstack()
-    sizes = test['count'].values / (data['budget'].count()) * 100
-
-    # affichage du camembert
-    plt.pie(sizes,
-            labeldistance=1.2,
-            labels=round(test['min'], 0),
-            shadow=False,
-            startangle=0,
-            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
-    
-    
-    df_filling = data.copy(deep=True)
-    missing_year_info = df_filling[df_filling['title_year'].isnull()][[
-            'director_name','actor_1_name', 'actor_2_name', 'actor_3_name']]
-    missing_year_info[:]
-    
-    df_filling.iloc[177]
+#    pca = decomposition.PCA(n_components=5)
+#    pca.fit(X_scaled)
+#
+#    print(pca.explained_variance_ratio_)
+#    print(pca.explained_variance_ratio_.sum())
+#
+#    # projeter X sur les composantes principales
+#    X_projected = pca.transform(X_scaled)
+#
+#    import matplotlib.cm as cm
+#    m = cm.ScalarMappable(cmap=cm.jet)
+#    m.set_array(X_projected)
+#    plt.colorbar(m)
+#    
+#    # afficher chaque observation
+#    plt.scatter(X_projected[:, 0], X_projected[:, 1], c=data.get('imbd_score'))
+#    #plt.xlim([-5.5, 5.5])
+#    #plt.ylim([-4, 4])
+#    plt.colorbar(m)
+#
+#    # Pour mieux comprendre ce que capture ces composantes principales, 
+#    # nous pouvons utiliser pca.components_, qui nous donne les coordonnées 
+#    # des composantes principales dans l'espace initial (celui à 10 variables).
+#    # Nous allons afficher, pour chacune des 10 performances, 
+#    # un point dont l'abscisse sera sa contribution à la première PC 
+#    #   et l'ordonnée sa contribution à la deuxième PC.
+#    pcs = pca.components_
+#    
+#    for i, (x, y) in enumerate(zip(pcs[0, :], pcs[1, :])):
+#        # Afficher un segment de l'origine au point (x, y)
+#        plt.plot([0, x], [0, y], color='k')
+#        # Afficher le nom (data.columns[i]) de la performance
+#        plt.text(x, y, data.columns[i], fontsize='8')
+#    
+#    # Afficher une ligne horizontale y=0
+#    plt.plot([-0.7, 0.7], [0, 0], color='grey', ls='--')
+#    
+#    # Afficher une ligne verticale x=0
+#    plt.plot([0, 0], [-0.7, 0.7], color='grey', ls='--')
+#    
+#    plt.xlim([-0.7, 0.7])
+#    plt.ylim([-0.7, 0.7])
+#
+#
+#
+#
+#    # Affichage des décades
+#    data['decade'] = data['title_year'].apply(lambda x: ((x)//10)*10)
+#
+#    # Creation of a dataframe with statitical infos on each decade:
+#    test = data['title_year'].groupby(data['decade']).apply(get_stats).unstack()
+#
+#    sizes = test['count'].values / (data['title_year'].count()) * 100
+#
+#    # pour le camembert
+#    # Attention car y'a aussi ceux qui n'ont pas de dates.
+#    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+#
+#    # affichage du camembert
+#    plt.pie(sizes,
+#            explode=explode,
+#            labeldistance=1.2,
+#            labels=round(test['min'], 0),
+#            shadow=False,
+#            startangle=0,
+#            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
+#
+#    # Liste des noms complets à analyser
+#    alphabet = []
+#    alphabet.append('num_critic_for_reviews')
+#    alphabet.append('num_user_for_reviews')
+#    alphabet.append('duration')
+#    alphabet.append('gross')
+#    alphabet.append('budget')
+#    alphabet.append('imdb_score')
+#    alphabet.append('movie_facebook_likes')
+#    alphabet.append('cast_total_facebook_likes')
+#    alphabet.append('num_voted_users')
+#
+#     # Affichage des imdb_score par 10
+#    data['imdb_score10'] = data['imdb_score'].apply(lambda x: round(x, 0))
+#
+#    # Creation of a dataframe with statitical infos on each decade:
+#    test = data['imdb_score'].groupby(data['imdb_score10']).apply(get_stats).unstack()
+#    sizes = test['count'].values / (data['imdb_score'].count()) * 100
+#
+#    # pour le camembert
+#    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+#
+#    # affichage du camembert
+#    plt.pie(sizes,
+#            explode=explode,
+#            labeldistance=1.2,
+#            labels=round(test['min'], 0),
+#            shadow=False,
+#            startangle=0,
+#            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
+#
+#
+#    data['budget10'] = data['budget'].apply(lambda x: ((x)//1000000))
+#
+#    # Creation of a dataframe with statitical infos on each decade:
+#    test = data['budget'].groupby(data['budget10']).apply(get_stats).unstack()
+#    sizes = test['count'].values / (data['budget'].count()) * 100
+#
+#    # affichage du camembert
+#    plt.pie(sizes,
+#            labeldistance=1.2,
+#            labels=round(test['min'], 0),
+#            shadow=False,
+#            startangle=0,
+#            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
+#    
+#    
+#    df_filling = data.copy(deep=True)
+#    missing_year_info = df_filling[df_filling['title_year'].isnull()][[
+#            'director_name','actor_1_name', 'actor_2_name', 'actor_3_name']]
+#    missing_year_info[:]
+#    
+#    df_filling.iloc[177]
