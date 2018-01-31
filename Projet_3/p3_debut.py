@@ -21,7 +21,20 @@ from sklearn import decomposition
 # Voir si les fonctions que j'ai prises sur kaggle ne sont pas de trop.
 # Ne pas prendre en compte dans un premier temps les mots-clefs car trop nombreux.
 # =============================================================================
-    
+
+# cleaner le dataset
+# mettre les valeurs que je veux
+# calculer les distances 
+
+# pca
+# variation du facteur  silhouette en fonction de nb de clusters
+# sklearn.metrics.silhouette_score
+
+# voir le r2 pour la correlation
+# voir ave le scatter plot
+
+# indice de popularité du film dans un deuxième temps pour départager ceux qui pourraient etre dans un meme cluster
+
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_3\\images'
@@ -151,6 +164,8 @@ def transpose_bool(data):
     
     # Suppression de la colonne "vide"
     del data['vide']
+    
+    # etudier l'impact des n premiers
 
 #def affichage_nearest_neighbours(data, nom_film):
 #
@@ -233,6 +248,9 @@ def main():
     """
     # On charge le dataset
     data = pd.read_csv(_FICHIER)
+
+    # Suppresion de doublons
+    data.drop_duplicates(subset=['movie_title', 'actor_1_name', 'director_name'], keep='first')
 
     print("Données manquantes")
     # nombre de valeurs "NaN"
