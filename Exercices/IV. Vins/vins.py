@@ -55,10 +55,11 @@ score = 'accuracy'
 # Créer un classifieur kNN avec recherche d'hyperparamètre par validation croisée
 clf = model_selection.GridSearchCV(neighbors.KNeighborsClassifier(), # un classifieur kNN
                                     param_grid, # hyperparamètres à tester
-                                    cv=5, # nombre de folds de validation croisée
+                                    cv=5,
                                     scoring=score # score à optimiser
                                     )
 
+# cv=5, # nombre de folds de validation croisée
 # Optimiser ce classifieur sur le jeu d'entraînement
 # clf.fit(X_train, y_train)
 clf.fit(X_train_std, y_train)
