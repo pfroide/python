@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-"""
-Éditeur de Spyder
 
-Ceci est un script temporaire.
-"""
+# P3 : Data cleaning
 
 # On importe les librairies dont on aura besoin pour ce tp
 import numpy as np
@@ -11,12 +8,6 @@ import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
 from sklearn import linear_model
 
-# =============================================================================
-# Après le mentorat de Thierry :
-# Voir si les fonctions que j'ai prises sur kaggle ne sont pas de trop.
-# Ne pas prendre en compte dans un premier temps les mots-clefs car trop nombreux.
-# =============================================================================
-    
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_3\\images'
@@ -37,25 +28,25 @@ def count_word(data, ref_col, liste):
     TBD
     """
     keyword_count = dict()
-    
-    for s in liste:
-        keyword_count[s] = 0
-    
+
+    for word in liste:
+        keyword_count[word] = 0
+
     for liste_keywords in data[ref_col].str.split('|'):
         if isinstance(liste_keywords, float) and pd.isnull(liste_keywords):
             continue
-        for s in [s for s in liste_keywords if s in liste]:
-            if pd.notnull(s):
-                keyword_count[s] += 1
+        for word in [word for word in liste_keywords if word in liste]:
+            if pd.notnull(word):
+                keyword_count[word] = keyword_count[word] + 1
 
     # convert the dictionary in a list to sort the keywords by frequency
     keyword_occurences = []
-    
+
     for k, v in keyword_count.items():
         keyword_occurences.append([k, v])
-    
+
     keyword_occurences.sort(key=lambda x: x[1], reverse=True)
-    
+
     return keyword_occurences, keyword_count
 
 def afficher_plot(type_donnee, trunc_occurences):
@@ -66,8 +57,8 @@ def afficher_plot(type_donnee, trunc_occurences):
 
     words = dict()
 
-    for s in trunc_occurences:
-        words[s[0]] = s[1]
+    for word in trunc_occurences:
+        words[word[0]] = word[1]
 
     plt.figure(figsize=(15, 10))
     y_axis = [i[1] for i in trunc_occurences]
@@ -97,7 +88,7 @@ def comptabiliser(data, valeur_cherchee):
         if isinstance(word, float):
             continue
         listing = listing.union(word)
-    
+
     # compter le nombre d'occurence de ces genres
     listing_compte, dum = count_word(data, valeur_cherchee, listing)
 
@@ -142,27 +133,28 @@ def histogramme(data, colon):
     plt.title(titre)
     # plt.hist(data[colon], bins=bin_values)
     # Test sans les valeurs NaN
-    plt.hist(data[colon][np.isfinite(data[colon])], bins = 100)
+    plt.hist(data[colon][np.isfinite(data[colon])], bins=100)
     plt.savefig(fichier_save, dpi=100)
 
-def scatter_plot(data, nom_colonne, nom_colonne2):
+def scatter_plot(data, nom_colonne2, nom_colonne):
     """
         Fonction qui permet d'afficher les nuages de points
     """
 
     #Log
-    print("Fct affichage_plot : Affichage de la courbe\n")
+    print("Fct affichage_plot\n")
+
+    data = data[data[nom_colonne] <= data[nom_colonne].quantile(0.98)]
+    data = data[data[nom_colonne2] <= data[nom_colonne2].quantile(0.98)]
 
     # Déliminations du visuel pour x
     xmax = max(data[nom_colonne])
     ymax = max(data[nom_colonne2])
 
-    xmax = 150000
-    ymax = 150000
-
     # Déliminations du visuel pour y
     xmin = min(data[nom_colonne])
     ymin = min(data[nom_colonne2])
+
 
     # création du nuage de point avec toujours la même ordonnée
     data.plot(kind="scatter", x=nom_colonne, y=nom_colonne2)
@@ -172,7 +164,33 @@ def scatter_plot(data, nom_colonne, nom_colonne2):
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
     plt.show()
-    
+
+def input_reg_linear(data, colon_predict, colon_ref):
+    """
+    TBD
+    """
+
+    # Création de la régression linéaire
+    regr = linear_model.LinearRegression()
+    test = data[[colon_predict, colon_ref]].dropna(how='any', axis=0)
+
+    # Conversion en NP
+    x_data = np.array(test[colon_ref])
+    y_data = np.array(test[colon_predict])
+
+    # Reshape obligatoire
+    x_data = x_data.reshape(len(x_data), 1)
+    y_data = y_data.reshape(len(y_data), 1)
+
+    # On fit les données préparées
+    regr.fit(x_data, y_data)
+
+    test = data[data[colon_predict].isnull() & data[colon_ref].notnull()]
+
+    for index, row in test.iterrows():
+        value = float(regr.predict(row[colon_ref]))
+        data.set_value(index, colon_predict, value)
+
 def main():
     """
     TBD
@@ -180,68 +198,75 @@ def main():
     # On charge le dataset
     data = pd.read_csv(_FICHIER)
 
+    # Suppresion de doublons
+    data=data.drop_duplicates(subset=['movie_title', 'actor_1_name', 'director_name'], keep='first')
+    
+    # Données manquantes
     print("Données manquantes")
-    # nombre de valeurs "NaN"
-    # .isnull().sum() = nombre par ligne
-    # .isnull().sum().sum() = nombre total
-    # Compte les données manquantes par colonne
     missing_data = data.isnull().sum(axis=0).reset_index()
 
     # Change les noms des colonnes
     missing_data.columns = ['column_name', 'missing_count']
 
-    # Crée une nouvelle colonne et fais le calcul en pourcentage des données
-    # manquantes
+    # Crée une nouvelle colonne et fais le calcul des données manquantes
     missing_data['filling_factor'] = (data.shape[0]-missing_data['missing_count'])/data.shape[0]*100
 
     # Classe et affiche
     missing_data.sort_values('filling_factor').reset_index(drop=True)
 
-    # Transposition du dataframe de données pour l'abalyse univariée
+    # Transposition du dataframe de données pour l'analyse univariée
     fichier_save = _DOSSIERTRAVAIL + '\\' + 'transposition.csv'
     data_transpose = data.describe().reset_index().transpose()
-    print (data_transpose)
+    print(data_transpose)
     data_transpose.to_csv(fichier_save)
-    
+
     # Matrice de correlation
-    correlation_matrix(data)
     # The movie "gross" has strong positive correlation with the "num_voted_users"
-    
-    # Log
-    print("Fct traitement_data : \n")
+    correlation_matrix(data)
 
-    # Affichage des nuages de points avant traitement
-    for i in data:
-        # Log
-        print("Avant traitement")
-        scatter_plot(data, i)
-    
-    scatter_plot(data, 'cast_total_facebook_likes', 'actor_1_facebook_likes')
-    
-    # Création des histogrammes
-    for nom_colonne in data:
-        if (data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64'):
-            histogramme(data, nom_colonne)
+    data_reg = data.copy()
 
-    data.fillna(0, inplace=True)
-    
-    regression = []
-    
+    # Masque pour virer les valeurs NaN
+    # mask_colon1 = ~np.isnan(data_reg['gross'])
+    mask_colon1 =  np.isfinite(data_reg['gross'])
+
+    #data_reg.fillna(0, inplace=True)
+
     colon1 = 'gross'
-    
-    for nom_colonne in data:    
-        colon2 = nom_colonne
 
-        if (data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64') and colon2 != 'gross' :
+    for colon2 in data:
+        if (data_reg[colon2].dtype == 'float' or data_reg[colon2].dtype == 'int64') and colon2 != colon1:
+            
+            # mask_colon2 = ~np.isnan(data_reg[colon2])
+            mask_colon2 =  np.isfinite(data_reg[colon2])
+            mask = mask_colon1 & mask_colon2
+            
             # Calcul d'une regression linéaire
             regr = linear_model.LinearRegression()
-            regr.fit(data[colon1].values.reshape(-1, 1), data[colon2].values.reshape(-1, 1))
-        
-            # Affichage de la variances : On doit être le plus proche possible de 1
-            print('Regression sur les deux colonnes :', colon1, colon2)
-            print('Score : %.2f' % np.corrcoef(data[colon1], data[colon2])[1, 0])
-            regression.append(np.corrcoef(data[colon1], data[colon2])[1, 0])
 
+            # Reshape
+            data_x = data_reg[colon1].values.reshape(-1, 1)
+            data_y = data_reg[colon2].values.reshape(-1, 1)
+
+            # Fit
+            regr.fit(data_x[mask], data_y[mask])
+
+            # Affichage de la variances : On doit être le plus proche possible de 1
+            print('Regression sur :', colon1, colon2)
+            print('Score : %.2f' % np.corrcoef(data_reg[colon1][mask], data_reg[colon2][mask])[1, 0])
+            print('R2    : %.2f \n' % regr.score(data_x[mask], data_y[mask]))
+
+    # Affichage des nuages de points
+    for nom_colonne in data:
+        if data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64':
+            scatter_plot(data, 'gross', nom_colonne)
+
+    # Création des histogrammes
+    for nom_colonne in data:
+        if data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64':
+            histogramme(data, nom_colonne)
+
+    # Partie pour le recensement
     # Création de la database avec tous les noms d'acteurs car ils sont sur
     # 3 colonnes différentes
     db_names = []
@@ -250,39 +275,58 @@ def main():
     db_names.extend(data['actor_3_name'])
     data_names = pd.DataFrame(db_names, columns=['name'])
 
-    # compter tous genres des films
-    genre_list = comptabiliser(data, 'genres')
-    print(len(genre_list))
-
-    # compter tous languages des films
-    language_list = comptabiliser(data, 'language')
-    print(len(language_list))
-
-    # compter tous les pays des films
-    country_list = comptabiliser(data, 'country')
-    print(len(country_list))
-    
-    # compter tous les ratings
-    rating_list = comptabiliser(data, 'content_rating')
-    print(len(rating_list))
-    
-    # compter tous mots-clefs des films
-    keywords_list = comptabiliser(data, 'plot_keywords')
-    print(len(keywords_list))
-
-    # compter tous les directeurs de films
-    directors_list = comptabiliser(data, 'director_name')
-    print(len(directors_list))
-
     # compter tous les acteurs de films
     actors_list = comptabiliser(data_names, 'name')
-    print(len(actors_list))
-    
-    # Affichages
-    afficher_plot('genres', genre_list[0:50])
-    afficher_plot('keywords', keywords_list[0:50])
-    afficher_plot('directors', directors_list[0:50])
     afficher_plot('actors', actors_list[0:50])
-    afficher_plot('languages', language_list[0:50])
-    afficher_plot('countrys', country_list[0:50])
-    afficher_plot('ratings', rating_list[0:50])
+
+    list_a_afficher = ['genres', 'language', 'country', 'content_rating', 'plot_keywords', 'director_name', 'actor_1_name', 'actor_2_name', 'actor_3_name']
+
+    for name in list_a_afficher:
+        res = comptabiliser(data, name)
+        afficher_plot(name, res[0:50])
+
+    colon_predict = 'gross'
+    colon_ref = 'num_voted_users'
+    input_reg_linear(data, colon_predict, colon_ref)
+
+    data.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_bdd_clean_v2.csv')
+
+#    # compter tous genres des films
+#    genre_list = comptabiliser(data, 'genres')
+#    print(len(genre_list))
+#
+#    # compter tous languages des films
+#    language_list = comptabiliser(data, 'language')
+#    print(len(language_list))
+#
+#    # compter tous les pays des films
+#    country_list = comptabiliser(data, 'country')
+#    print(len(country_list))
+#
+#    # compter tous les ratings
+#    rating_list = comptabiliser(data, 'content_rating')
+#    print(len(rating_list))
+#
+#    # compter tous mots-clefs des films
+#    keywords_list = comptabiliser(data, 'plot_keywords')
+#    print(len(keywords_list))
+#
+#    # compter tous les directeurs de films
+#    directors_list = comptabiliser(data, 'director_name')
+#    print(len(directors_list))s
+#
+#    actor_1_name_list = comptabiliser(data, 'actor_1_name')
+#    actor_2_name_list = comptabiliser(data, 'actor_2_name')
+#    actor_3_name_list = comptabiliser(data, 'actor_3_name')
+#
+#    # Affichages
+#    afficher_plot('genres', genre_list[0:50])
+#    afficher_plot('keywords', keywords_list[0:50])
+#    afficher_plot('directors', directors_list[0:50])
+#    afficher_plot('languages', language_list[0:50])
+#    afficher_plot('countrys', country_list[0:50])
+#    afficher_plot('ratings', rating_list[0:50])
+#    afficher_plot('actors', actors_list[0:50])
+#    afficher_plot('actor_1_name', actor_1_name_list[0:50])
+#    afficher_plot('actor_2_name', actor_2_name_list[0:50])
+#    afficher_plot('actor_3_name', actor_3_name_list[0:50])
