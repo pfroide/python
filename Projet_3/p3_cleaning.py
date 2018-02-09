@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
 from sklearn import linear_model
+#from fancyimpute import BiScaler, KNN, NuclearNormMinimization, SoftImpute
 
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\movie_metadata.csv'
@@ -165,6 +166,77 @@ def scatter_plot(data, nom_colonne2, nom_colonne):
     plt.ylim(ymin, ymax)
     plt.show()
 
+
+def lasso(data):
+
+    from sklearn import linear_model
+    from sklearn.model_selection import train_test_split
+    import numpy as np
+    from sklearn import preprocessing
+
+    # On charge le dataset
+    data = pd.read_csv(_FICHIER)
+
+    # Suppresion de doublons
+    data=data.drop_duplicates(subset = ['movie_title', 'actor_1_name', 'director_name'], keep='first')
+
+    data = data.drop(['color', 'director_name', 'actor_1_name', 'genres', 'movie_title', 'actor_2_name', 'actor_3_name'], axis=1)
+    data = data.drop(['plot_keywords', 'movie_imdb_link', 'language', 'country', 'content_rating'], axis=1)
+
+    data.fillna(-1, inplace=True)
+
+    X = data.copy()
+    del X['gross']
+    y = data['gross']
+    
+    std_scale = preprocessing.StandardScaler().fit(X)
+    X_scaled = std_scale.transform(X)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size = 0.2)
+
+    # On crée un modèle de régression linéaire
+    lr = linear_model.LinearRegression()
+
+    # On entraîne ce modèle sur les données d'entrainement
+    lr.fit(X_train, y_train)
+
+    # On récupère l'erreur de norme 2 sur le jeu de données test comme baseline
+    baseline_error = np.mean((lr.predict(X_test) - y_test) ** 2)
+
+    print(baseline_error)
+
+    n_alphas = 500
+    alphas = np.logspace(-10, 10, n_alphas)
+    ridge = linear_model.Ridge()
+    
+    coefs = []
+    errors = []
+    for a in alphas:
+        ridge.set_params(alpha=a)
+        ridge.fit(X_train, y_train)
+        coefs.append(ridge.coef_)
+        errors.append([baseline_error, np.mean((ridge.predict(X_test) - y_test) ** 2)])
+    
+    ax = plt.gca()
+    
+    ax.plot(alphas, coefs)
+    ax.set_xscale('log')
+    plt.xlabel('alpha')
+    plt.ylabel('weights')
+    plt.axis('tight')
+    plt.show()
+
+    ax = plt.gca()
+    
+    ax.plot(alphas, errors)
+    ax.set_xscale('log')
+    plt.xlabel('alpha')
+    plt.ylabel('error')
+    plt.axis('tight')
+    plt.show()
+
+    errors[np.argmin(errors)][1]
+    alphas[np.argmin(errors)]
+    
 def input_reg_linear(data, colon_predict, colon_ref):
     """
     TBD
@@ -191,6 +263,21 @@ def input_reg_linear(data, colon_predict, colon_ref):
         value = float(regr.predict(row[colon_ref]))
         data.set_value(index, colon_predict, value)
 
+def replace_classification(data):
+    
+    data['content_rating'] = data['content_rating'].replace('Unrated', 'Not Rated')
+    data['content_rating'] = data['content_rating'].replace('Approved', 'Passed')
+    data['content_rating'] = data['content_rating'].replace('TV-14', 'R')
+    data['content_rating'] = data['content_rating'].replace('TV-MA', 'NC-17')
+    data['content_rating'] = data['content_rating'].replace('TV-PG', 'PG-13')
+    data['content_rating'] = data['content_rating'].replace('GP', 'PG')
+    data['content_rating'] = data['content_rating'].replace('X', 'NC-17')
+    data['content_rating'] = data['content_rating'].replace('M', 'R')
+    data['content_rating'] = data['content_rating'].replace('TV-Y', 'G')
+    data['content_rating'] = data['content_rating'].replace('TV-Y7', 'G')
+    data['content_rating'] = data['content_rating'].replace('TV-G', 'PG')
+    data['content_rating'] = data['content_rating'].replace('Passed', 'G')
+    
 def main():
     """
     TBD
@@ -199,8 +286,8 @@ def main():
     data = pd.read_csv(_FICHIER)
 
     # Suppresion de doublons
-    data=data.drop_duplicates(subset=['movie_title', 'actor_1_name', 'director_name'], keep='first')
-    
+    data=data.drop_duplicates(subset = ['movie_title', 'actor_1_name', 'director_name'], keep='first')
+
     # Données manquantes
     print("Données manquantes")
     missing_data = data.isnull().sum(axis=0).reset_index()
@@ -228,7 +315,7 @@ def main():
 
     # Masque pour virer les valeurs NaN
     # mask_colon1 = ~np.isnan(data_reg['gross'])
-    mask_colon1 =  np.isfinite(data_reg['gross'])
+    mask_colon1 = np.isfinite(data_reg['gross'])
 
     #data_reg.fillna(0, inplace=True)
 
@@ -236,11 +323,11 @@ def main():
 
     for colon2 in data:
         if (data_reg[colon2].dtype == 'float' or data_reg[colon2].dtype == 'int64') and colon2 != colon1:
-            
+
             # mask_colon2 = ~np.isnan(data_reg[colon2])
-            mask_colon2 =  np.isfinite(data_reg[colon2])
+            mask_colon2 = np.isfinite(data_reg[colon2])
             mask = mask_colon1 & mask_colon2
-            
+
             # Calcul d'une regression linéaire
             regr = linear_model.LinearRegression()
 
@@ -281,6 +368,8 @@ def main():
 
     list_a_afficher = ['genres', 'language', 'country', 'content_rating', 'plot_keywords', 'director_name', 'actor_1_name', 'actor_2_name', 'actor_3_name']
 
+    replace_classification(data)
+
     for name in list_a_afficher:
         res = comptabiliser(data, name)
         afficher_plot(name, res[0:50])
@@ -290,43 +379,3 @@ def main():
     input_reg_linear(data, colon_predict, colon_ref)
 
     data.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_bdd_clean_v2.csv')
-
-#    # compter tous genres des films
-#    genre_list = comptabiliser(data, 'genres')
-#    print(len(genre_list))
-#
-#    # compter tous languages des films
-#    language_list = comptabiliser(data, 'language')
-#    print(len(language_list))
-#
-#    # compter tous les pays des films
-#    country_list = comptabiliser(data, 'country')
-#    print(len(country_list))
-#
-#    # compter tous les ratings
-#    rating_list = comptabiliser(data, 'content_rating')
-#    print(len(rating_list))
-#
-#    # compter tous mots-clefs des films
-#    keywords_list = comptabiliser(data, 'plot_keywords')
-#    print(len(keywords_list))
-#
-#    # compter tous les directeurs de films
-#    directors_list = comptabiliser(data, 'director_name')
-#    print(len(directors_list))s
-#
-#    actor_1_name_list = comptabiliser(data, 'actor_1_name')
-#    actor_2_name_list = comptabiliser(data, 'actor_2_name')
-#    actor_3_name_list = comptabiliser(data, 'actor_3_name')
-#
-#    # Affichages
-#    afficher_plot('genres', genre_list[0:50])
-#    afficher_plot('keywords', keywords_list[0:50])
-#    afficher_plot('directors', directors_list[0:50])
-#    afficher_plot('languages', language_list[0:50])
-#    afficher_plot('countrys', country_list[0:50])
-#    afficher_plot('ratings', rating_list[0:50])
-#    afficher_plot('actors', actors_list[0:50])
-#    afficher_plot('actor_1_name', actor_1_name_list[0:50])
-#    afficher_plot('actor_2_name', actor_2_name_list[0:50])
-#    afficher_plot('actor_3_name', actor_3_name_list[0:50])
