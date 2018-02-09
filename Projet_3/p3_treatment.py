@@ -6,26 +6,11 @@ from __future__ import print_function
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
-from sklearn import linear_model
 from sklearn.cluster import KMeans
-from sklearn import cluster, metrics, manifold
+from sklearn import metrics
 from sklearn.neighbors import NearestNeighbors
 from sklearn import preprocessing
-from sklearn import decomposition
 from sklearn.metrics import silhouette_samples, silhouette_score
-import plotly.plotly as py
-import plotly.graph_objs as go
-from plotly import tools
-from scipy.spatial.distance import cdist
-from sklearn.datasets import make_blobs
-
-import matplotlib
-
-# =============================================================================
-# Après le mentorat de Thierry :
-# Voir si les fonctions que j'ai prises sur kaggle ne sont pas de trop.
-# Ne pas prendre en compte dans un premier temps les mots-clefs car trop nombreux.
-# =============================================================================
 
 # etudier l'impact des n premiers
 
@@ -45,6 +30,34 @@ import matplotlib
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_bdd_clean_v2.csv'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_3\\images'
+
+def dbscan(X,sp):
+
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import StandardScaler
+
+    X = StandardScaler().fit_transform(X)
+
+    # Compute DBSCAN
+    db = DBSCAN(eps=0.8, min_samples=sp).fit(X)
+    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+    core_samples_mask[db.core_sample_indices_] = True
+    labels = db.labels_
+    print(labels)
+    #X['labels'] = labels
+    
+    # Number of clusters in labels, ignoring noise if present.
+    n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+    
+    print('Estimated number of clusters: %d' % n_clusters_)
+    #print("Homogeneity: %0.3f" % metrics.homogeneity_score(labels_true, labels))
+    #print("Completeness: %0.3f" % metrics.completeness_score(labels_true, labels))
+    #print("V-measure: %0.3f" % metrics.v_measure_score(labels_true, labels))
+    #print("Adjusted Rand Index: %0.3f" % metrics.adjusted_rand_score(labels_true, labels))
+    #print("Adjusted Mutual Information: %0.3f" % metrics.adjusted_mutual_info_score(labels_true, labels))
+    print("Silhouette Coefficient: %0.3f" % metrics.silhouette_score(X, labels))
+
+    return n_clusters_
 
 def illustration(data, range_n_clusters):
     
@@ -255,18 +268,26 @@ def transpose_bool(data, colon, limite):
     
     # énumaration des genres
     listing = comptabiliser(data, colon)
-
+    
     p=0    
+
     for mot, compte in listing:
         if p<limite:
-            data[mot] = pd.Series(((1 if mot in data[colon][i] else 0) for i in range(len(data[colon]))), index=data.index)
+            data[mot] = pd.Series(((1 if mot == data[colon][i] else 0) for i in range(len(data[colon]))), index=data.index)
         else:
-            return 0
+            return p
         p=p+1
-        
+    
+    return p 
     # Suppression de la colonne "vide"
     #del data['vide']
 
+def tets():
+    for x in datanum.itertuples():
+        for i,j in enumerate(datanum):
+            if x[i] == 1:
+                print(x[0], j)
+        
 def histogramme(data, colon):
     """
         Note : La première colonne et la dernière ont un " caché
@@ -290,16 +311,6 @@ def tester_moteur(datanum, titre):
     print(datanum['labels'][datanum['movie_title'].str.contains(titre)])
     print(datanum['movie_title'][datanum['movie_title'].str.contains(titre)])
 
-def test(data):
-    
-    import seaborn as sn
-    from sklearn.preprocessing import StandardScaler
-        
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(data)
-    cmap = sn.cubehelix_palette(as_cmap=True, rot=-.3, light=1)
-    sn.clustermap(X_scaled, cmap=cmap, linewidths=.5)
-
 def trouver_films_nom(data, titre):
     
     # liste_films = []
@@ -320,7 +331,134 @@ def trouver_films_id(data, film_id):
     label = data.index(film_id)
     
     print(data['movie_title'][data['labels'] == label])
+
+def recommandation(datanum, data, id):
+        
+    #
+    neigh = NearestNeighbors(n_neighbors=20, 
+                             algorithm='auto', 
+                             metric='euclidean'
+                            )
+    neigh.fit(datanum)
+
+    #
+    if isinstance(id, int):
+        p = datanum.loc[id].values.reshape(1, -1)
+    else:
+        datanum['movie_title'] = data['movie_title']
+        #p = datanum.loc[datanum['movie_title'].replace({'\xa0': ''}, regex=True) == id]
+        p = datanum.loc[datanum['movie_title'].replace({'\xa0': ''}, regex=True).str.contains(id)]
+        del p['movie_title']
+        del datanum['movie_title']
     
+    p=np.array(p)
+    
+    if (p.size>0):
+        
+        #
+        indices = neigh.kneighbors(p)
+        
+        #
+        datanum['movie_title'] = data['movie_title']
+        
+        #
+        for i in indices[1]:
+            #print(datanum.loc[i]['movie_title'])
+            second_df = data.loc[i]
+            
+        #print(second_df['movie_title'])
+        
+        del datanum['movie_title']
+        
+        # Création du second dataset pour tester la popularité
+        #second_df = second(second_df)
+        liste_criteres = ['movie_title', 'cast_total_facebook_likes', 'num_user_for_reviews', 'imdb_score', 'movie_facebook_likes']
+    
+        for colon in second_df:
+            if colon not in liste_criteres:
+                del second_df[colon]
+        
+        # Tester la popularité
+        pop(second_df, data, id)
+        
+    else:
+        print("Le film recherché n'existe pas.")
+
+def pop(second_df, data, id):
+
+    #neigh = NearestNeighbors(n_neighbors=18, 
+    #                         algorithm='auto', 
+    #                         metric='euclidean'
+    #                        )
+    
+    #second_df.fillna(0, inplace=True)
+    #std_scale = preprocessing.StandardScaler().fit(second_df)
+    #second_df = std_scale.transform(second_df)
+
+    min_max_scaler = preprocessing.MinMaxScaler()
+    second_df[['cast_total_facebook_likes', 'num_user_for_reviews', 'imdb_score', 'movie_facebook_likes']] = min_max_scaler.fit_transform(second_df[['cast_total_facebook_likes', 'num_user_for_reviews', 'imdb_score', 'movie_facebook_likes']])
+    
+    second_df['score'] = second_df['cast_total_facebook_likes'] + second_df['num_user_for_reviews'] + second_df['imdb_score'] + second_df['movie_facebook_likes']
+        
+    second_df = second_df.sort_values(by = 'score', ascending = False)
+    
+    m=second_df.index
+    
+    from random import randint
+    
+    for i in range(0,5):
+        print(second_df[:5]['movie_title'])
+    
+    #for i in range(0,6):
+    #    print(second_df['movie_title'], '\t', second_df['score'])
+
+    #liste_finale = []
+    
+    # Using `get_value(index, column)`
+    #print(second_df.get_value(489, 'score'))
+
+    #second_df['score']
+    #p=second_df.index()<
+    #p = 0
+    
+    #for x in second_df.itertuples():
+    #    #print("x", x[1])
+    #    #print("x", x[6])
+    #    print("p", x[p])
+    #    p = p + 1
+#        for i, j in enumerate(x):
+            #print("i", i)
+            #print("j", j)
+
+    #neigh.fit(X_scaled)
+    
+    #second_df['movie_title'] = data['movie_title']
+    #p = second_df.loc[second_df['movie_title'].replace({'\xa0': ''}, regex=True).str.contains(id)]
+    #del p['movie_title']
+    #p=np.array(p)
+    #del second_df['movie_title']
+    
+    #indices = neigh.kneighbors(p)
+    
+    #second_df['movie_title'] = data['movie_title']
+    
+    #print('indices : ', indices[1])
+    
+    #for i in indices[1]:
+    #    print(second_df.loc[i]['movie_title'])
+
+    #del second_df['movie_title']
+
+def second(second_df):
+    
+    liste_criteres = ['cast_total_facebook_likes', 'num_user_for_reviews', 'imdb_score', 'movie_facebook_likes']
+    
+    for colon in second_df:
+        if colon not in liste_criteres:
+            del second_df[colon]
+    
+    #return data
+
 def main():
     """
     TBD
@@ -338,24 +476,12 @@ def main():
     missing_data['filling_factor'] = (datanum.shape[0]-missing_data['missing_count'])/datanum.shape[0]*100
     missing_data.sort_values('filling_factor').reset_index(drop=True)
 
-    # Pour les noms d'acteurs    
-    #db_names = []
-    #db_names.extend(data['actor_1_name'])
-    #db_names.extend(data['actor_2_name'])
-    #db_names.extend(data['actor_3_name'])
-    #datanames = pd.DataFrame(db_names, columns=['name'])
-
-    #transpose_bool(datanum, 'language', 50)
-    #transpose_bool(datanum, 'country')    
-    transpose_bool(datanum, 'genres', 50)
-    transpose_bool(datanum, 'plot_keywords', 50)
-    transpose_bool(datanum, 'color', 50)
-    transpose_bool(datanum, 'content_rating', 50)
-    transpose_bool(datanum, 'director_name', 50)
-    transpose_bool(datanum, 'actor_1_name', 50)
-    transpose_bool(datanum, 'actor_2_name', 50)
-    transpose_bool(datanum, 'actor_3_name', 50)
-    
+    # Transposition en 0 et 1 des valeurs non-numériques
+    liste_criteres = ['genres', 'plot_keywords', 'content_rating', 'director_name', 'actor_1_name', 'actor_2_name', 'actor_3_name']
+    for critere in liste_criteres:
+        num = transpose_bool(datanum, critere, 50)
+        print("Nombre : ", num, "\t", critere)
+        
     # Suppression de la colonne "vide"
     #del datanames['vide']
     
@@ -367,15 +493,24 @@ def main():
     datanum = datanum.drop(['num_critic_for_reviews', 'director_facebook_likes', 'actor_3_facebook_likes'], axis=1)
     datanum = datanum.drop(['num_user_for_reviews', 'actor_1_facebook_likes', 'actor_2_facebook_likes'], axis=1)
     datanum = datanum.drop(['aspect_ratio', 'num_voted_users', 'cast_total_facebook_likes'], axis=1)
+    datanum = datanum.drop(['title_year', 'gross', 'duration', 'budget', 'imdb_score', 'movie_facebook_likes', 'facenumber_in_poster'], axis=1)
     
     datanum.fillna(0, inplace=True)
     
     # Coude
-    res, dico = affichage_kmeans(datanum, 2, 500, 2)
+    res, dico = affichage_kmeans(datanum, 10, 300, 5)
     
     # C'est moche
     illustration(datanum, range(150, 200, 1))
     
+    std_scale = preprocessing.StandardScaler().fit(datanum)
+    X_scaled = std_scale.transform(datanum)
+    
+    kmeans = KMeans(n_clusters=160, random_state=10)
+    kmeans.fit(X_scaled)
+    # Nouvelle colonne avec les conclusions de kmeans
+    datanum['labels'] = kmeans.labels_
+        
     # PEP 448 et disponible à partir de Python 3.5
     # Mix de deux dictionnaires
     #z = {**res, **save}
@@ -386,19 +521,25 @@ def main():
     plt.show()
 
     # On remets les titres pour y voir plus clair
-    datanum['movie_title'] = data['movie_title']    
+    datanum['movie_title'] = data['movie_title']  
     
     # Petits tests
     liste_titres = ['Star Wars', 'Expendables', 'American Pie', 'Toy Story', 'Shrek', 'Saw', 'Rocky']
     for titre in liste_titres:
         tester_moteur(datanum, titre)
     
-    print(datanum['labels'][datanum['labels'] == 99])
-    print(datanum['movie_title'][datanum['labels'] == 99])
+    print(datanum['labels'][datanum['labels'] == 10])
+    print(datanum['movie_title'][datanum['labels'] == 10])
     
+    trouver_films_nom(datanum, 'Toy Story')
+        
     histogramme(datanum, 'labels')
     
     datanum.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_test.csv')
+    
+    
+    # tester dbscan
+    # knn à investiger sérieusemnet
     
 #    pca = decomposition.PCA(n_components=5)
 #    pca.fit(X_scaled)
