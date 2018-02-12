@@ -156,7 +156,6 @@ def scatter_plot(data, nom_colonne2, nom_colonne):
     xmin = min(data[nom_colonne])
     ymin = min(data[nom_colonne2])
 
-
     # création du nuage de point avec toujours la même ordonnée
     data.plot(kind="scatter", x=nom_colonne, y=nom_colonne2)
 
@@ -165,7 +164,6 @@ def scatter_plot(data, nom_colonne2, nom_colonne):
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
     plt.show()
-
 
 def lasso(data):
 
@@ -277,6 +275,11 @@ def replace_classification(data):
     data['content_rating'] = data['content_rating'].replace('TV-Y7', 'G')
     data['content_rating'] = data['content_rating'].replace('TV-G', 'PG')
     data['content_rating'] = data['content_rating'].replace('Passed', 'G')
+    
+    data['content_rating'] = data['content_rating'].replace('G', 'G-')
+    data['content_rating'] = data['content_rating'].replace('PG-13', 'PG13')
+    data['content_rating'] = data['content_rating'].replace('PG', 'P-G')
+    data['content_rating'] = data['content_rating'].replace('R', 'Rated-R')
     
 def main():
     """
