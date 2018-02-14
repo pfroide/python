@@ -1,11 +1,8 @@
 """
-TBD
-
 # -*- coding: utf-8 -*-
-# On importe les librairies dont on aura besoin pour ce tp
-
 """
 
+# On importe les librairies dont on aura besoin pour ce tp
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt, cm as cm
@@ -14,9 +11,7 @@ from sklearn import metrics
 from sklearn.neighbors import NearestNeighbors
 from sklearn import preprocessing
 from sklearn.metrics import silhouette_samples, silhouette_score
-
-# etudier l'impact des n premiers
-# pca
+import json
 
 # Lieu où se trouve le fichier
 _FICHIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_bdd_clean_v2.csv'
@@ -260,7 +255,10 @@ def transpose_bool(data, colon, limite):
 
     for mot, compte in listing:
         if p < limite:
-            data[mot] = pd.Series(((1 if mot in data[colon][i] else 0) for i in range(len(data[colon]))), index=data.index)
+            if mot not in data:
+                data[mot] = pd.Series(((1 if mot in data[colon][i] else 0) for i in range(len(data[colon]))), index=data.index)
+            else:
+                data[mot] = pd.Series(((1 if (np.logical_or(data[mot].item == 1, mot in data[colon][i])) else 0) for i in range(len(data[colon]))), index=data.index)
         else:
             return p
         p = p+1
@@ -294,9 +292,10 @@ def recommandation(datanum, data, id_film):
     """
     #
     if isinstance(id_film, int):
-        p = datanum.loc[id_film].values.reshape(1, -1)
+        data_film = datanum.loc[id_film].values.reshape(1, -1)
         # Quel est le titre recherché
         titre = data['movie_title'].loc[id_film]
+        titre_fin = titre
         print('Titre retenu : ', titre)
     else:
         
@@ -304,20 +303,25 @@ def recommandation(datanum, data, id_film):
         datanum['movie_title'] = data['movie_title']
 
         # Recherche des données du film
-        p = datanum.loc[datanum['movie_title'].str.contains(id_film)]
+        data_film = datanum.loc[datanum['movie_title'].str.contains(id_film)]
 
         # Quel est le titre recherché
         mask = datanum['movie_title'].str.contains(id_film)
         titre = data['movie_title'][mask]
+        
+        # Astuce pour avoir un string au bon format
+        for i in titre[-1:]:
+            titre_fin = i
+
         print('Titre retenu : ', titre.values[-1:])
 
         # Suppression de la colonne non-chifrée
-        del p['movie_title']
+        del data_film['movie_title']
         del datanum['movie_title']
 
-    p = np.array(p)
+    data_film = np.array(data_film)
 
-    if p.size > 0:
+    if data_film.size > 0:
 
         # configuration du knn
         neigh = NearestNeighbors(n_neighbors=20,
@@ -327,17 +331,24 @@ def recommandation(datanum, data, id_film):
 
         # knn
         neigh.fit(datanum)
-        indices = neigh.kneighbors(p)
+        indices = neigh.kneighbors(data_film)
 
-        #
-        datanum['movie_title'] = data['movie_title']
+        indice_supp = []
+
+        for i in indices[1][-1]:
+            #print(data.loc[i]['movie_title'])
+            if str(data.loc[i]['movie_title']) in titre_fin:
+                indice_supp.append(i)
+            elif (titre_fin in (str(data.loc[i]['movie_title']))):
+                indice_supp.append(i)
 
         #
         for i in indices[1]:
-            second_df = data.loc[i]
-
-        del datanum['movie_title']
-
+            second_df = data.loc[i] 
+        
+        for i in indice_supp:
+            second_df = second_df.drop([i])
+        
         # Création du second dataset pour tester la popularité
         liste_criteres = ['movie_title',
                           'cast_total_facebook_likes',
@@ -352,12 +363,12 @@ def recommandation(datanum, data, id_film):
         second_df.fillna(0, inplace=True)
 
         # Tester la popularité
-        pop(second_df, data, id_film)
+        pop(second_df, data, datanum, id_film)
 
     else:
         print("Le film recherché n'existe pas.")
 
-def pop(second_df, data, id_film):
+def pop(second_df, data, datanum, id_film):
     """
     TBD
     """
@@ -376,31 +387,38 @@ def pop(second_df, data, id_film):
     # Calcul de la valeur absolue du score pour voir la différence avec les autres films
     second_df['score'] = abs(second_df['score']-score)
     second_df = second_df.sort_values(by='score', ascending=True)
-    
-    # 5 résultats les plus proches sans prendre le film lui-même qui est en case 0
-    res = second_df['movie_title'][1:6]
 
     # Résultats
-    print(res)
+    #print(res)
 
-def second(second_df):
-    """
-    TBD
-    """
+    # Résultats en dictionnaire
+    dico_resultats = {}
+    
+    # 5 résultats les plus proches sans prendre le film lui-même qui est en case 0
+    for i in range(0,5):
+        dico_resultats[str(second_df.index[i])] = second_df['movie_title'][second_df.index[i]]
 
-    liste_criteres = ['cast_total_facebook_likes',
-                      'num_user_for_reviews',
-                      'imdb_score',
-                      'movie_facebook_likes']
+    # print(dico_resultats)
+    print(json.dumps(dico_resultats, indent=4))
 
-    for colon in second_df:
-        if colon not in liste_criteres:
-            del second_df[colon]
+    # Petite vérification des mot-clefs associés
+    # 5 résultats les plus proches sans prendre le film lui-même qui est en case 0
+    #res = second_df['movie_title'][0:5]
+
+    #for i in range(len(res)):
+    #    print(data.loc[res.index[i]]['movie_title'])
+    #    for j in datanum:
+    #        if datanum.loc[res.index[i]][j] == 1:
+    #            print(j)
+    #    print()
+    # datanum.loc[n][datanum.loc[n] == 1]
 
 def main():
     """
     TBD
     """
+    
+    #data_test.set_index("Robert de Niro", inplace=True)
     # On charge le dataset
     data = pd.read_csv(_FICHIER, encoding="ISO-8859-1")
 
@@ -421,13 +439,12 @@ def main():
     missing_data.sort_values('filling_factor').reset_index(drop=True)
 
     # Transposition en 0 et 1 des valeurs non-numériques
-    liste_criteres = ['genres',
-                      'plot_keywords',
-                      'content_rating',
-                      'director_name',
-                      'actor_1_name',
+    liste_criteres = ['actor_1_name',
                       'actor_2_name',
-                      'actor_3_name']
+                      'actor_3_name',
+                      'genres',
+                      'content_rating',
+                      'director_name']
 
     for critere in liste_criteres:
         num = transpose_bool(datanum, critere, 50)
@@ -478,156 +495,4 @@ def main():
     # On remets les titres pour y voir plus clair
     datanum['movie_title'] = data['movie_title']
 
-    datanum.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_test.csv')
-
-#def tester_moteur(datanum, titre):
-#    print(datanum['labels'][datanum['movie_title'].str.contains(titre)])
-#    print(datanum['movie_title'][datanum['movie_title'].str.contains(titre)])
-#
-#def trouver_films_nom(data, titre):
-#
-#    # liste_films = []
-#
-#    label = int(data['labels'][data['movie_title'].replace({'\xa0': ''}, regex=True) == titre])
-#
-#    print(data['movie_title'][data['labels'] == label])
-#    #print(data['movie_title'].where(data['labels'] == label))
-#
-#    # Tentatives de conversion de chaines de caractères
-#    # p=data.where(data['director_name'] == 'James Cameron')
-#    # p=p.where(p['movie_title'] == 'The Terminator')
-#    # x=data['movie_title'].replace({'\xa0': ''}, regex=True)
-#
-#def trouver_films_id(data, film_id):
-#
-#    # liste_films = []
-#    label = data.index(film_id)
-#
-#    print(data['movie_title'][data['labels'] == label])
-
-#def tets():
-#    for x in datanum.itertuples():
-#        for i,j in enumerate(datanum):
-#            if x[i] == 1:
-#                print(x[0], j)
-
-#    pca = decomposition.PCA(n_components=5)
-#    pca.fit(X_scaled)
-#
-#    print(pca.explained_variance_ratio_)
-#    print(pca.explained_variance_ratio_.sum())
-#
-#    # projeter X sur les composantes principales
-#    X_projected = pca.transform(X_scaled)
-#
-#    import matplotlib.cm as cm
-#    m = cm.ScalarMappable(cmap=cm.jet)
-#    m.set_array(X_projected)
-#    plt.colorbar(m)
-#
-#    # afficher chaque observation
-#    plt.scatter(X_projected[:, 0], X_projected[:, 1], c=data.get('imbd_score'))
-#    #plt.xlim([-5.5, 5.5])
-#    #plt.ylim([-4, 4])
-#    plt.colorbar(m)
-#
-#    # Pour mieux comprendre ce que capture ces composantes principales,
-#    # nous pouvons utiliser pca.components_, qui nous donne les coordonnées
-#    # des composantes principales dans l'espace initial (celui à 10 variables).
-#    # Nous allons afficher, pour chacune des 10 performances,
-#    # un point dont l'abscisse sera sa contribution à la première PC
-#    #   et l'ordonnée sa contribution à la deuxième PC.
-#    pcs = pca.components_
-#
-#    for i, (x, y) in enumerate(zip(pcs[0, :], pcs[1, :])):
-#        # Afficher un segment de l'origine au point (x, y)
-#        plt.plot([0, x], [0, y], color='k')
-#        # Afficher le nom (data.columns[i]) de la performance
-#        plt.text(x, y, data.columns[i], fontsize='8')
-#
-#    # Afficher une ligne horizontale y=0
-#    plt.plot([-0.7, 0.7], [0, 0], color='grey', ls='--')
-#
-#    # Afficher une ligne verticale x=0
-#    plt.plot([0, 0], [-0.7, 0.7], color='grey', ls='--')
-#
-#    plt.xlim([-0.7, 0.7])
-#    plt.ylim([-0.7, 0.7])
-#
-#
-#
-#
-#    # Affichage des décades
-#    data['decade'] = data['title_year'].apply(lambda x: ((x)//10)*10)
-#
-#    # Creation of a dataframe with statitical infos on each decade:
-#    test = data['title_year'].groupby(data['decade']).apply(get_stats).unstack()
-#
-#    sizes = test['count'].values / (data['title_year'].count()) * 100
-#
-#    # pour le camembert
-#    # Attention car y'a aussi ceux qui n'ont pas de dates.
-#    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-#
-#    # affichage du camembert
-#    plt.pie(sizes,
-#            explode=explode,
-#            labeldistance=1.2,
-#            labels=round(test['min'], 0),
-#            shadow=False,
-#            startangle=0,
-#            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
-#
-#    # Liste des noms complets à analyser
-#    alphabet = []
-#    alphabet.append('num_critic_for_reviews')
-#    alphabet.append('num_user_for_reviews')
-#    alphabet.append('duration')
-#    alphabet.append('gross')
-#    alphabet.append('budget')
-#    alphabet.append('imdb_score')
-#    alphabet.append('movie_facebook_likes')
-#    alphabet.append('cast_total_facebook_likes')
-#    alphabet.append('num_voted_users')
-#
-#     # Affichage des imdb_score par 10
-#    data['imdb_score10'] = data['imdb_score'].apply(lambda x: round(x, 0))
-#
-#    # Creation of a dataframe with statitical infos on each decade:
-#    test = data['imdb_score'].groupby(data['imdb_score10']).apply(get_stats).unstack()
-#    sizes = test['count'].values / (data['imdb_score'].count()) * 100
-#
-#    # pour le camembert
-#    explode = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-#
-#    # affichage du camembert
-#    plt.pie(sizes,
-#            explode=explode,
-#            labeldistance=1.2,
-#            labels=round(test['min'], 0),
-#            shadow=False,
-#            startangle=0,
-#            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
-#
-#
-#    data['budget10'] = data['budget'].apply(lambda x: ((x)//1000000))
-#
-#    # Creation of a dataframe with statitical infos on each decade:
-#    test = data['budget'].groupby(data['budget10']).apply(get_stats).unstack()
-#    sizes = test['count'].values / (data['budget'].count()) * 100
-#
-#    # affichage du camembert
-#    plt.pie(sizes,
-#            labeldistance=1.2,
-#            labels=round(test['min'], 0),
-#            shadow=False,
-#            startangle=0,
-#            autopct=lambda x: '{:1.0f}%'.format(x) if x > 5 else '')
-#
-#
-#    df_filling = data.copy(deep=True)
-#    missing_year_info = df_filling[df_filling['title_year'].isnull()][[
-#            'director_name','actor_1_name', 'actor_2_name', 'actor_3_name']]
-#    missing_year_info[:]
-#
-#    df_filling.iloc[177]
+    datanum.to_csv('C:\\Users\\Toni\\Desktop\\pas_synchro\\p3_datanum.csv')
