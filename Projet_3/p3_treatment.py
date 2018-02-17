@@ -353,6 +353,8 @@ def recommandation(datanum, data, id_film):
         liste_criteres = ['movie_title',
                           'cast_total_facebook_likes',
                           'imdb_score',
+                          'num_user_for_reviews',
+                          'num_voted_users',
                           'movie_facebook_likes']
 
         for colon in second_df:
@@ -377,7 +379,9 @@ def pop(second_df, data, datanum, id_film):
     min_max_scaler = preprocessing.MinMaxScaler()
     second_df[['cast_total_facebook_likes',
                'imdb_score',
-               'movie_facebook_likes']] = min_max_scaler.fit_transform(second_df[['cast_total_facebook_likes', 'imdb_score', 'movie_facebook_likes']])
+               'num_user_for_reviews',
+               'num_voted_users',
+               'movie_facebook_likes']] = min_max_scaler.fit_transform(second_df[['cast_total_facebook_likes', 'imdb_score', 'num_user_for_reviews', 'num_voted_users', 'movie_facebook_likes']])
     
     second_df['score'] = second_df['cast_total_facebook_likes'] + second_df['imdb_score'] + second_df['movie_facebook_likes']
 
@@ -403,14 +407,14 @@ def pop(second_df, data, datanum, id_film):
 
     # Petite vérification des mot-clefs associés
     # 5 résultats les plus proches sans prendre le film lui-même qui est en case 0
-    #res = second_df['movie_title'][0:5]
+    res = second_df['movie_title'][0:5]
 
-    #for i in range(len(res)):
-    #    print(data.loc[res.index[i]]['movie_title'])
-    #    for j in datanum:
-    #        if datanum.loc[res.index[i]][j] == 1:
-    #            print(j)
-    #    print()
+    for i in range(len(res)):
+        print(data.loc[res.index[i]]['movie_title'])
+        for j in datanum:
+            if datanum.loc[res.index[i]][j] == 1:
+                print(j)
+        print()
     # datanum.loc[n][datanum.loc[n] == 1]
 
 def main():
