@@ -1,49 +1,55 @@
 """
 Created on Wed Feb 14 20:22:34 2018
 
+Version online du fichier de recherche de films.
+
 @author: Toni
 """
 # On importe les librairies dont on aura besoin pour ce tp
+import json
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from sklearn import preprocessing
 from flask import Flask
-import json
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\'
 _FICHIERDATA = _DOSSIER + 'p3_bdd_clean_v2.csv'
-_FICHIERDATANUM = _DOSSIER + 'p3_datanum.csv' 
+_FICHIERDATANUM = _DOSSIER + 'p3_datanum.csv'
 
 app = Flask(__name__)
 
-#@app.route('/recommand/<id_film>')
 @app.route('/<id_film>')
 
-def recommand(id_film): 
+def recommand(id_film):
+    """
+    Fonction d'entrée pour la recherche.
+    """
 
+    # Récupération des dataset
     data = pd.read_csv(_FICHIERDATA, encoding="ISO-8859-1")
     datanum = pd.read_csv(_FICHIERDATANUM, encoding="ISO-8859-1")
+
+    # Suppresion des caractères de fin de lignes
     data = data.replace({'\xa0': ''}, regex=True)
+
+    # Suppression des colonnes superflues
     del data['Unnamed: 0']
     del datanum['Unnamed: 0']
-
-    #print(recommandation(datanum, data, id_film))
 
     return recommandation(datanum, data, id_film)
 
 def recommandation(datanum, data, id_film):
     """
-    TBD
+    Fonction qui calcule en fonction des dataset et du film d'entrée
     """
 
-    #
+    # String initial vide
     texte_final = ''
 
-    #
-    if isinstance(id_film, str):
-
+    # Bloc try/exception pour voir si on a des résultats ou pas
+    try:
         # Rajout des noms
         datanum['movie_title'] = data['movie_title']
 
@@ -62,13 +68,23 @@ def recommandation(datanum, data, id_film):
         del data_film['movie_title']
         del datanum['movie_title']
 
-    else:
-        data_film = datanum.loc[int(id_film)].values.reshape(1, -1)
-        # Quel est le titre recherché
-        titre_fin = data['movie_title'].loc[int(id_film)]
+        # Valeur numérique si rien n'a été trouvé avec le "string"
+        if data_film.empty:
+            # Titre recherché
+            titre_fin = data['movie_title'].loc[int(id_film)]
 
+            # Valeurs binaires du film
+            data_film = datanum.loc[int(id_film)].values.reshape(1, -1)
+
+    except:
+        # Rien n'a été trouvé
+        texte_final = "Le film recherché n'existe pas."
+
+    # Transformation en numpy array pour la suite du traitement
     data_film = np.array(data_film)
 
+    # Si on a trouvé quelque chose, on continue le traitement
+    # Sinon, on sort sans rien faire
     if data_film.size > 0:
 
         # Nom du film retenu
@@ -84,18 +100,21 @@ def recommandation(datanum, data, id_film):
         neigh.fit(datanum)
         indices = neigh.kneighbors(data_film)
 
-        indice_supp = []
-
-        for i in indices[1][-1]:
-            if str(data.loc[i]['movie_title']) in titre_fin:
-                indice_supp.append(i)
-            elif (titre_fin in (str(data.loc[i]['movie_title']))):
-                indice_supp.append(i)
-
-        #
+        # Récupération des 20 films
         for i in indices[1]:
             second_df = data.loc[i]
 
+        # Liste qui va récupérer les noms de films à supprimer
+        indice_supp = []
+
+        # Recherche des films de mêmes séries
+        for i in indices[1][-1]:
+            if str(data.loc[i]['movie_title']) in titre_fin:
+                indice_supp.append(i)
+            elif titre_fin in str(data.loc[i]['movie_title']):
+                indice_supp.append(i)
+
+        # Suppression effective des films de même série
         for i in indice_supp:
             second_df = second_df.drop([i])
 
@@ -107,6 +126,7 @@ def recommandation(datanum, data, id_film):
                           'num_voted_users',
                           'movie_facebook_likes']
 
+        # Suppresion des colonnes du dataset inutiles pour le calcul de popularité
         for colon in second_df:
             if colon not in liste_criteres:
                 del second_df[colon]
@@ -115,7 +135,7 @@ def recommandation(datanum, data, id_film):
         second_df.fillna(0, inplace=True)
 
         # Tester la popularité
-        reponse = pop(second_df, data, datanum, id_film)
+        reponse = popularite(second_df, id_film)
         texte_final = texte_final + reponse
 
     else:
@@ -123,12 +143,12 @@ def recommandation(datanum, data, id_film):
 
     return texte_final
 
-def pop(second_df, data, datanum, id_film):
+def popularite(second_df, id_film):
     """
-    TBD
+    Calcul de la popularité des 20 films pré-selectionnés
     """
 
-    # Indice de popularité simpliste
+    # Scale des données (division par la valeur maximum)
     min_max_scaler = preprocessing.MinMaxScaler()
     second_df[['cast_total_facebook_likes',
                'imdb_score',
@@ -136,6 +156,7 @@ def pop(second_df, data, datanum, id_film):
                'num_voted_users',
                'movie_facebook_likes']] = min_max_scaler.fit_transform(second_df[['cast_total_facebook_likes', 'imdb_score', 'num_user_for_reviews', 'num_voted_users', 'movie_facebook_likes']])
 
+    # Indice de popularité simpliste
     second_df['score'] = second_df['cast_total_facebook_likes'] + second_df['imdb_score'] + second_df['movie_facebook_likes'] + second_df['num_user_for_reviews'] + second_df['num_voted_users']
 
     # Score du film
@@ -144,21 +165,15 @@ def pop(second_df, data, datanum, id_film):
     # Calcul de la valeur absolue du score pour voir la différence avec les autres films
     second_df['score'] = abs(second_df['score']-score)
     second_df = second_df.sort_values(by='score', ascending=True)
-    
-    # 5 résultats
+
+    # On ne garde que les 5 résultats les plus proches sans prendre le film lui-même
     second_df = second_df[0:5]
-    
-    # Résultats en dictionnaire
-    #dico_resultats = {}
 
-    # 5 résultats les plus proches sans prendre le film lui-même qui est en case 0
-    #for i in range(0,5):
-    #    dico_resultats[str(second_df.index[i])] = second_df['movie_title'][second_df.index[i]]
+    # Transformation en dictionnaire
+    dico = {"_results" :[{'id':int(key), "name":value} for key, value in second_df['movie_title'].items()]}
 
-    # 5 résultats les plus proches sans prendre le film lui-même
-    dico = {"_results" :[{'id':int(key),"name":value} for key, value in second_df['movie_title'].items()]}
-    
+    # Transformation en format JSON
     json_dico = json.dumps(dico, indent=4, separators=(',', ': '))
 
-    # print(dico_resultats)
-    return(json_dico)
+    # On renvoie le résultat en format JSON
+    return json_dico
