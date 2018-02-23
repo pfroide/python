@@ -10,40 +10,71 @@ import numpy as np
 from sklearn import model_selection
 from sklearn import preprocessing
 from sklearn import neighbors, metrics
-from sklearn.neighbors import NearestNeighbors
 
 _CHEMIN = 'C:\\Users\\Toni\\python\\python\\Exercices\\IV. Vins\\'
 _ROUGE = 'winequality-red.csv'
 _BLANC = 'winequality-white.csv'
 
-param_neigh = range(3,16,2)
-
-nb_fold = 5
-
 # Récuparation du dataset
 data = pd.read_csv(_CHEMIN + _BLANC, sep=";")
 
-def ma_fonction(param_neigh):
-    
-    # Mise en forme du dataset
-    X = data.as_matrix(data.columns[:-1])
-    y = data.as_matrix([data.columns[-1]])
-    y = y.flatten()
-    y_class = np.where(y < 6, 0, 1)
+def ma_fonction(p, nb_fold):
+    """
+    TBD
+    """
 
-    # 30% des données dans le jeu de test
-    X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y_class, test_size=0.3)
+    # Partie de découpage
+    taille_fold = int(len(data)/nb_fold)
 
-    std_scale = preprocessing.StandardScaler().fit(X_train)
-    X_train_std = std_scale.transform(X_train)
-    X_test_std = std_scale.transform(X_test)
-    
-    for p in param_neigh:
-        nbrs = NearestNeighbors(n_neighbors=p).fit(X_train_std)
-        distances, indices = nbrs.kneighbors(X_train_std)
-        print(distances)
-        print(indices)
+    somme = 0
 
+    for i in range(0, nb_fold):
+        # On gére d'abord les deux particuliers
+        if i == 0:
+            data_test = data[:(i+1)*taille_fold]
+            data_train = data[(i+1)*taille_fold:]
+
+        elif i == (nb_fold-1):
+            data_test = data[i*taille_fold:]
+            data_train = data[:i*taille_fold]
+
+        # Cas  général : On merge les deux bouts si on a extrait au départ un bout du milieu
+        elif i != (nb_fold-1):
+            data_test = data[i*taille_fold:(i+1)*taille_fold]
+            data_train1 = data[:i*taille_fold]
+            data_train2 = data[(i+1)*taille_fold:]
+
+            frames = [data_train1, data_train2]
+            data_train = pd.concat(frames)
+
+        # Mise en forme du dataset
+        x_train = data_train.as_matrix(data_train.columns[:-1])
+        y_train = data_train.as_matrix([data_train.columns[-1]])
+
+        # Mise en forme du dataset
+        x_test = data_test.as_matrix(data_test.columns[:-1])
+        y_test = data_test.as_matrix([data_test.columns[-1]])
+        
+        # Classification en binaire
+        y_test = np.where(y_test < 6, 0, 1)
+
+        # Scale
+        std_scale = preprocessing.StandardScaler().fit(x_train)
+        x_train_std = std_scale.transform(x_train)
+        x_test_std = std_scale.transform(x_test)
+
+        # Prédictions
+        nbrs = neighbors.KNeighborsClassifier(n_neighbors=p).fit(x_train_std, y_train)
+        y_pred = nbrs.predict(x_test_std)
+
+        # Classification en binaire
+        y_pred = np.where(y_pred < 6, 0, 1)
+
+        # Cumul pour ensuite diviser et avoir la moyenne du score
+        somme = somme + metrics.accuracy_score(y_test, y_pred)
+
+    # Score
+    return somme/nb_fold
 
 def fonction_valid_croise(param_grid):
     """
@@ -60,11 +91,11 @@ def fonction_valid_croise(param_grid):
     y_class = np.where(y < 6, 0, 1)
 
     # 30% des données dans le jeu de test
-    X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y_class, test_size=0.3)
+    x_train, x_test, y_train, y_test = model_selection.train_test_split(X, y_class, test_size=0.3)
 
-    std_scale = preprocessing.StandardScaler().fit(X_train)
-    X_train_std = std_scale.transform(X_train)
-    X_test_std = std_scale.transform(X_test)
+    std_scale = preprocessing.StandardScaler().fit(x_train)
+    x_train_std = std_scale.transform(x_train)
+    x_test_std = std_scale.transform(x_test)
 
     # Créer un classifieur kNN avec recherche d'hyperparamètre par validation croisée
     clf = model_selection.GridSearchCV(neighbors.KNeighborsClassifier(), # un classifieur kNN
@@ -75,7 +106,7 @@ def fonction_valid_croise(param_grid):
 
     # cv=5, # nombre de folds de validation croisée
     # Optimiser ce classifieur sur le jeu d'entraînement
-    clf.fit(X_train_std, y_train)
+    clf.fit(x_train_std, y_train)
 
     # Afficher le(s) hyperparamètre(s) optimaux
     print("Meilleur(s) hyperparamètre(s) sur le jeu d'entraînement : ", clf.best_params_)
@@ -94,13 +125,26 @@ def fonction_valid_croise(param_grid):
                                                    params # hyperparamètre
                                                   ))
 
-    y_pred = clf.predict(X_test_std)
+    y_pred = clf.predict(x_test_std)
 
     print("\nSur le jeu de test : %0.3f" % metrics.accuracy_score(y_test, y_pred))
 
 def main():
-    
-    # Fixer les valeurs des hyperparamètres à tester
-    param_grid = {'n_neighbors':[3, 5, 7, 9, 11, 13, 15]}
+    """
+    TBD
+    """
 
-    fonction_valid_croise(param_grid)
+    # Fixer les valeurs des hyperparamètres à tester
+    param_grid = [3, 5, 7, 9, 11, 13, 15]
+
+    liste_finale = dict()
+
+    for p in param_grid:
+        liste_finale[p] = (ma_fonction(p, 5))
+
+    print(liste_finale.items())
+
+    import operator
+    indicemax = max(liste_finale.items(), key=operator.itemgetter(1))[0]
+
+    print('Configuration optimale pour', indicemax, 'neighbors :', round(liste_finale[indicemax], 3))
