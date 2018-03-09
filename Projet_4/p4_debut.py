@@ -83,9 +83,16 @@ def histogramme(data, colon):
     plt.ylabel('Décompte')
     titre = 'Histogramme ' + colon
     plt.title(titre)
+    plt.xlim(-100,100)
     # plt.hist(data[colon], bins=bin_values)
     # Test sans les valeurs NaN
-    plt.hist(data[colon][np.isfinite(data[colon])], bins=100)
+    classes = np.linspace(-100, 100, 200)
+    
+    # Ligne rouge verticale
+    plt.plot([0.0, 0], [0, 180000], 'r-', lw=2)
+    
+    # Données de l'histogramme
+    plt.hist(data[colon][np.isfinite(data[colon])], bins=classes)
     #plt.savefig(fichier_save, dpi=100)
 
 def afficher_plot(type_donnee, trunc_occurences):
@@ -176,7 +183,7 @@ def main():
     Fonction main
     """
 
-    _FICHIERDATA = _DOSSIER + '2016_04.csv'
+    _FICHIERDATA = _DOSSIER + '2016_01.csv'
 
     _FICHIERDATA = 'C:\\Users\\Toni\\Desktop\\On_Time_On_Time_Performance_2016_4.csv'
     
@@ -191,8 +198,12 @@ def main():
     liste_criteres.extend(['CARRIER_DELAY', 'WEATHER_DELAY', 'NAS_DELAY', 'SECURITY_DELAY'])
     liste_criteres.extend(['DAY_OF_WEEK', 'MONTH', 'ORIGIN', 'DEST'])
     
-    data = pd.DataFrame({'A' : []})
+    # catégoriser les petits/grands retards
+    # visualier les distributions des retards
+    # régression linéaire multiple
     
+    # On récupère toute les données
+    data = pd.DataFrame({'A' : []})
     for i in range(1,13):
         if i <10:
             fichier = str('2016_0' + str(i) + '.csv')
@@ -209,8 +220,7 @@ def main():
                 del datatemp[colon]
             
         data = pd.concat([data, datatemp])
-        
-    del data['Unnamed: 64']
+
     del data['A']
     
     result2 = result.copy()
@@ -223,9 +233,8 @@ def main():
     m = data.groupby(['DEST']).count()
     b = data.groupby(['ARR_DELAY']).count()
     n = data.groupby(['Trajet']).count()
+    c = data[valeur_cherchee].value_counts()
     
-    #frames = [data, data2]
-    #data = result.copy()
 
     # Données manquantes
     print("Données manquantes")
@@ -245,15 +254,23 @@ def main():
     # Création des histogrammes
     for nom_colonne in data:
         if data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64':
-            histogramme(data, nom_colonne)
+            if 'DELAY' in nom_colonne:
+                histogramme(data, nom_colonne)
 
     #for name in 'Trajet':
-    res = comptabiliser(data, 'Trajet')
-    afficher_plot('Trajet', res[0:100])
+    res = comptabiliser(data, 'ARR_DELAY')
+    afficher_plot('ARR_DELAY', res[0:100])
 
     # Pour le mois d'avril    
     res = comptabiliser(data, 'MONTH')
     afficher_plot('MONTH', res[0:50])
 
-    # 31 avril ?
-    data['FL_DATE'] = data['FL_DATE'].str.replace('-03-', '-04-')
+    
+def f1(liste):
+    compte = {}.fromkeys(set(liste),0)
+    
+    for valeur in liste:
+        if valeur != 'nan':
+            compte[valeur] += 1
+    
+    return compte
