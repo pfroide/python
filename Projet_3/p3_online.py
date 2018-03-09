@@ -115,8 +115,8 @@ def recommandation(datanum, data, id_film):
                 indice_supp.append(i)
 
         # Suppression effective des films de même série
-        for i in indice_supp:
-            second_df = second_df.drop([i])
+        #for i in indice_supp:
+        #    second_df = second_df.drop([i])
 
         # Création du second dataset pour tester la popularité
         liste_criteres = ['movie_title',
@@ -135,7 +135,7 @@ def recommandation(datanum, data, id_film):
         second_df.fillna(0, inplace=True)
 
         # Tester la popularité
-        reponse = popularite(second_df, id_film)
+        reponse = popularite(second_df, id_film, indice_supp)
         texte_final = texte_final + reponse
 
     else:
@@ -143,7 +143,7 @@ def recommandation(datanum, data, id_film):
 
     return texte_final
 
-def popularite(second_df, id_film):
+def popularite(second_df, id_film, indice_supp):
     """
     Calcul de la popularité des 20 films pré-selectionnés
     """
@@ -162,9 +162,13 @@ def popularite(second_df, id_film):
     # Score du film
     score = sum(second_df.score[second_df.movie_title == id_film])
 
+    # Suppression effective des films de même série
+    for i in indice_supp:
+        second_df = second_df.drop([i])
+            
     # Calcul de la valeur absolue du score pour voir la différence avec les autres films
-    second_df['score'] = abs(second_df['score']-score)
-    second_df = second_df.sort_values(by='score', ascending=True)
+    second_df['scoreP'] = abs(second_df['score']-score)
+    second_df = second_df.sort_values(by='scoreP', ascending=True)
 
     # On ne garde que les 5 résultats les plus proches sans prendre le film lui-même
     second_df = second_df[0:5]
