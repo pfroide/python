@@ -8,6 +8,7 @@ Created on Mon Mar 19 20:33:54 2018
 # On importe les librairies dont on aura besoin pour ce tp
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from matplotlib import pyplot as plt, cm as cm
 from sklearn.ensemble import RandomForestRegressor
 
@@ -31,6 +32,8 @@ def retard_par_aeroport(data):
         df1 = data[data['UNIQUE_CARRIER'] == carrier]
         test = df1['ARR_DELAY'].groupby(data['ORIGIN_AIRPORT_ID']).apply(get_stats).unstack()
         airport_mean_delays[carrier] = test.loc[:, 'mean']
+    
+    return airport_mean_delays
 
 def correlation_matrix(data):
     """
@@ -60,7 +63,7 @@ def histogramme(data, colon, limitemin, limitemax):
         Note : La première colonne et la dernière ont un " caché
     """
 
-    #fichier_save = _DOSSIERTRAVAIL + '\\' + 'histogram_' + colon
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'histogram_' + colon
 
     #steps = (max(data[colon])-min(data[colon]))/100
     #bin_values = np.arange(start=min(data[colon]), stop=max(data[colon]), step=steps)
@@ -75,11 +78,11 @@ def histogramme(data, colon, limitemin, limitemax):
     classes = np.linspace(-100, 100, 200)
 
     # Ligne rouge verticale
-    plt.plot([0.0, 0], [0, 2000], 'r-', lw=2)
+    plt.plot([0.0, 0], [0, 10000], 'r-', lw=2)
 
     # Données de l'histogramme
     plt.hist(data[colon][np.isfinite(data[colon])], bins=classes)
-    #plt.savefig(fichier_save, dpi=100)
+    plt.savefig(fichier_save, dpi=100)
 
 def get_stats(param):
     """
@@ -229,11 +232,33 @@ def main():
     liste_criteres.extend(['DAY_OF_MONTH', 'UNIQUE_CARRIER', 'DEP_TIME_BLK', 'ARR_TIME_BLK'])
     liste_criteres.extend(['ORIGIN_CITY_NAME', 'DEST_CITY_NAME', 'DISTANCE_GROUP'])
 
+#    liste_criteres = []
+#    liste_criteres = ['FL_DATE', 'AIRLINE_ID']
+#    liste_criteres.extend(['DEP_TIME', 'DEP_DELAY', 'ARR_TIME', 'ARR_DELAY'])
+#    liste_criteres.extend(['ORIGIN', 'DEST'])
+#    liste_criteres.extend(['UNIQUE_CARRIER'])
+
     for colon in data:
         if colon not in liste_criteres:
             del data[colon]
 
     data = data.drop_duplicates(keep='first')
+
+    # Classification des retards        
+    for dataset in data:
+        data.loc[data['ARR_DELAY'] <= 15, 'CLASSE_DELAY'] = "Leger"
+        data.loc[data['ARR_DELAY'] >= 15, 'CLASSE_DELAY'] = "Moyen"
+        data.loc[data['ARR_DELAY'] >= 60, 'CLASSE_DELAY'] = "Important"
+        data.loc[data['ARR_DELAY'] < 0, 'CLASSE_DELAY'] = "En avance"
+    
+    # Affichage de la classification des retards
+    f,ax=plt.subplots(1,2,figsize=(20,8))
+    data['CLASSE_DELAY'].value_counts().plot.pie(autopct='%1.1f%%',ax=ax[0],shadow=True)
+    ax[0].set_title('CLASSE_DELAY')
+    ax[0].set_ylabel('')
+    sns.countplot('CLASSE_DELAY',order = data['CLASSE_DELAY'].value_counts().index, data=data,ax=ax[1])
+    ax[1].set_title('Status')
+    plt.show()
 
     # Données manquantes
     print("Données manquantes")
@@ -252,8 +277,8 @@ def main():
 
     # Affichage
     liste_affichage = []
-    liste_affichage = ['ORIGIN_AIRPORT_ID', 'ORIGIN_CITY_NAME', 'DEST_CITY_NAME', 'MONTH']
-    liste_affichage.extend(['AIRLINE_ID', 'DAY_OF_MONTH', 'DAY_OF_WEEK'])
+    liste_affichage = ['ORIGIN_AIRPORT_ID', 'DEST_AIRPORT_ID', 'MONTH']
+    liste_affichage.extend(['AIRLINE_ID', 'DAY_OF_WEEK'])
     liste_affichage.extend(['UNIQUE_CARRIER', 'DEP_TIME_BLK', 'ARR_TIME_BLK', 'DISTANCE_GROUP'])
 
     for colon in liste_affichage:
@@ -268,10 +293,15 @@ def main():
             if 'DELAY' in nom_colonne:
                 histogramme(data, nom_colonne, -70, 70)
 
-    retard_par_aeroport(data)
+    retards = retard_par_aeroport(data)
 
-#    tt_1 = data.groupby(['MONTH']).count()
-#    tt_2 = data.groupby(['ORIGIN']).count()
-#    tt_3 = data.groupby(['DEST']).count()
-#    tt_4 = data.groupby(['ARR_DELAY']).count()
-#    tt_5 = data.groupby(['AIRLINE_ID']).count()
+    liste_a_supprimer = ['AIRLINE_ID', 'AIR_TIME', 'ARR_TIME', 'CARRIER_DELAY']
+    liste_a_supprimer.extend(['DAY_OF_MONTH', 'DEP_TIME', 'DISTANCE', 'LATE_AIRCRAFT_DELAY'])
+    liste_a_supprimer.extend(['NAS_DELAY', 'SECURITY_DELAY', 'WEATHER_DELAY'])
+    liste_a_supprimer.extend(['ORIGIN_CITY_NAME', 'ORIGIN_AIRPORT_ID'])
+    liste_a_supprimer.extend(['FL_DATE', 'DEST_CITY_NAME', 'DEST_AIRPORT_ID', 'DEP_DELAY'])
+
+    for donnee in liste_a_supprimer:
+        del data[donnee]
+        
+    data.to_csv('C:\\Users\\Toni\\Desktop\\p4_bdd_clean_toni.csv')
