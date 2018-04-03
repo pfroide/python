@@ -17,6 +17,19 @@ from math import sqrt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn import preprocessing
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import ElasticNetCV
+from sklearn.linear_model import LarsCV
+from sklearn.linear_model import LassoCV
+from sklearn.linear_model import LassoLarsCV
+from sklearn.linear_model import OrthogonalMatchingPursuitCV
+from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import SGDRegressor
+from sklearn.linear_model import LinearRegression
+    
+import warnings
+warnings.filterwarnings("ignore")
 
 #joblib
 
@@ -44,49 +57,40 @@ def main():
     
     datanum = data.copy()
     datanum.describe()
-        
-    #resultsRMSE = pd.DataFrame({'RMSE' : []})
-    #resultsMSE = pd.DataFrame({'MSE' : []})
-    #resultsR2 = pd.DataFrame({'R2' : []})
-    
-    RMSE = []
-    #MSE = []
-    R2 = []
 
     liste = datanum['UNIQUE_CARRIER'].unique()
+    
+    # Logging for Visual Comparison
+    log_cols=["Classifier", "Id", "RMSE", "R2"]
+    log = pd.DataFrame(columns=log_cols)
     
     for compagnie in liste:
         datanum = data.copy()
 
-        print('Pour la compagnie', compagnie)
+        print('\n\nPour la compagnie', compagnie)
         
         datanum = datanum[datanum['UNIQUE_CARRIER']==compagnie]
         del datanum['UNIQUE_CARRIER']
-
-    # Données manquantes
-#    missing_data = datanum.isnull().sum(axis=0).reset_index()
-#    missing_data.columns = ['column_name', 'missing_count']
-#    missing_data['filling_factor'] = (datanum.shape[0]-missing_data['missing_count'])/datanum.shape[0]*100
-#    missing_data.sort_values('filling_factor').reset_index(drop=True)
-
-#    liste_a_supprimer = ['AIRLINE_ID', 'AIR_TIME', 'ARR_TIME', 'CARRIER_DELAY']
-#    liste_a_supprimer.extend(['DAY_OF_MONTH', 'DEP_TIME', 'DISTANCE', 'LATE_AIRCRAFT_DELAY'])
-#    liste_a_supprimer.extend(['NAS_DELAY', 'SECURITY_DELAY', 'WEATHER_DELAY'])
-#    liste_a_supprimer.extend(['ORIGIN_CITY_NAME', 'ORIGIN_AIRPORT_ID'])
-#    liste_a_supprimer.extend(['FL_DATE', 'DEST_CITY_NAME', 'DEST_AIRPORT_ID', 'DEP_DELAY'])
-
-#    for donnee in liste_a_supprimer:
-#        del datanum[donnee]
+        del datanum['ARR_TIME_BLK']
 
         # Transposition en 0 et 1 des valeurs non-numériques
-        liste_criteres = ['DEST', 
-                          'ORIGIN',
+        liste_criteres = ['ORIGIN',
                           'DEP_TIME_BLK',
-                          'ARR_TIME_BLK',
-                          'DISTANCE_GROUP',
-                          'DAY_OF_WEEK', 
+                          'DAY_OF_WEEK',
+                          'DEST',
                           'MONTH']
 
+#        liste_criteres = ['DEST', 
+#                          'ORIGIN',
+#                          'DEP_TIME_BLK',
+#                          'ARR_TIME_BLK',
+#                          'DISTANCE_GROUP',
+#                          'DAY_OF_WEEK', 
+#                          'MONTH']
+        
+    # tester sans ARR_TIME_BLK
+    # tester sans les critères d'arrivées
+    
     #    liste_criteres = ['DEST',
     #                      'ORIGIN',
     #                      'UNIQUE_CARRIER',
@@ -116,29 +120,39 @@ def main():
         #del data_x
         #del data_y
         
-        print("\nLinear")
-        a, b, c = linear(data_xtrain, data_xtest, data_ytrain, data_ytest)
-        
-        RMSE.append(round(a, 3))
-        #MSE.append(round(b, 3))
-        R2.append(round(c, 3))
-        
-        print("\nSGD")
-        a, b, c = sgd(data_xtrain, data_xtest, data_ytrain, data_ytest)
-        
-        RMSE.append(round(a, 3))
-        #MSE.append(round(b, 3))
-        R2.append(round(c, 3))
-        
-        print('\nLasso')
-        a, b, c = lasso(data_xtrain, data_xtest, data_ytrain, data_ytest)
-
-        RMSE.append(round(a, 3))
-        #MSE.append(round(b, 3))
-        R2.append(round(c, 3))
+#        print("\nLinear")
+#        a, b, c = linear(data_xtrain, data_xtest, data_ytrain, data_ytest)
+#        
+#        RMSE.append(round(a, 3))
+#        #MSE.append(round(b, 3))
+#        R2.append(round(c, 3))
+#        
+#        print("\nSGD")
+#        a, b, c = sgd(data_xtrain, data_xtest, data_ytrain, data_ytest)
+#        
+#        RMSE.append(round(a, 3))
+#        #MSE.append(round(b, 3))
+#        R2.append(round(c, 3))
+#        
+#        print('\nLasso')
+#        a, b, c = lasso(data_xtrain, data_xtest, data_ytrain, data_ytest)
+#
+#        RMSE.append(round(a, 3))
+#        #MSE.append(round(b, 3))
+#        R2.append(round(c, 3))
+#    
+#        print('\nElastic')
+#        a, b, c = elastic(data_xtrain, data_xtest, data_ytrain, data_ytest)
+#
+#        RMSE.append(round(a, 3))
+#        #MSE.append(round(b, 3))
+#        R2.append(round(c, 3))
     
-    print(sum(RMSE)/len(RMSE))
-    print(sum(R2)/len(R2))
+
+
+        log = all(data_xtrain, data_xtest, data_ytrain, data_ytest, compagnie, log)
+        
+        print(log)
     
 def linear(data_xtrain, data_xtest, data_ytrain, data_ytest):
 
@@ -218,6 +232,36 @@ def poly():
     X_ = poly.fit_transform(X)
     predict_ = poly.fit_transform(predict)
 
+def elastic(data_xtrain, data_xtest, data_ytrain, data_ytest):
+    
+    # import packages
+    from sklearn.linear_model import ElasticNetCV
+    from sklearn.metrics import mean_squared_error
+    
+    # specify the lasso regression model
+    #print("Début du Fit")
+    model=ElasticNetCV(cv=2, precompute=True).fit(data_xtrain, data_ytrain)
+    #print("Fin du Fit")
+
+    test_error = mean_squared_error(data_ytest, model.predict(data_xtest))
+
+    rsquared_test=model.score(data_xtest,data_ytest)
+        
+    RMSE = sqrt(test_error)
+    MSE = test_error
+    R2 = rsquared_test
+    
+    # The mean squared error
+    print("RMSE : %.3f" % RMSE)
+    
+    # The mean squared error
+    print("Mean squared error: %.3f" % MSE)
+    
+    # Explained variance score: 1 is perfect prediction
+    print('R2 score: %.3f' % R2)
+
+    return RMSE, MSE, R2
+
 def lasso(data_xtrain, data_xtest, data_ytrain, data_ytest):
 
     # import packages
@@ -225,41 +269,10 @@ def lasso(data_xtrain, data_xtest, data_ytrain, data_ytest):
     from sklearn.metrics import mean_squared_error
     
     # specify the lasso regression model
-    print("Début du Fit")
-    model=LassoLarsCV(cv=10, precompute=True).fit(data_xtrain, data_ytrain)
-    print("Fin du Fit")
-    
-#    # print variable names and regression coefficients
-#    #print(dict(zip(data_xtrain.columns, model.coef_)))
-#    
-#    #plot mean square error for each fold
-#    m_log_alphascv = -np.log10(model.cv_alphas_)
-#    plt.figure()
-#    plt.plot(m_log_alphascv, model.cv_mse_path_, ':')
-#    plt.plot(m_log_alphascv, model.cv_mse_path_.mean(axis=-1), 'k', label='Average across the folds', linewidth=2)
-#    plt.axvline(-np.log10(model.alpha_), color='k', label='alpha CV')
-#    
-#    plt.legend()
-#    plt.xlabel('-log(alpha)')
-#    plt.ylabel('Mean squared error')
-#    plt.title('Mean squared error on each fold')
-#    plt.show()
-#
-#    # In scikit learn lambda penalty is set by alpha_ attribute of model we select cv=10 in LassoLarsCV() function that is no  of K fold Validation. This graph shows the mean squared error of every fold with dotted line and average mean squared error of k fold is shown in solid line. The Vertical dotted black line choose optimum point having lowest bias and variance and this is used as  lambda penalty for shrinking coefficient.-np.log10()  transformation is applied to model.alpha_ to make it easily understandable
-#    
-#    # plot coefficient progression
-#    m_log_alphas = -np.log10(model.alphas_)
-#    ax = plt.gca()
-#    plt.plot(m_log_alphas, model.coef_path_.T)
-#    plt.axvline(-np.log10(model.alpha_), color='k', label='alpha CV')
-#    plt.ylabel('Regression Coefficients')
-#    plt.legend()
-#    plt.xlabel('-log(alpha)')
-#    plt.title('Regression Coefficients Progression for Lasso Paths')
-#    plt.show()
-    
-    # This graphs shows that relative importance of every variable and how their coefficient changes when new variable enters into the model. Sgpt Alamine Aminotransferase enter into the model first because it is more negatively correlated. The lambda penalty displayed between 2.9 to 3 in dotted vertical line controls the coefficient of every non zero coefficient attribute
-    
+    #print("Début du Fit")
+    model=LassoLarsCV(cv=2, precompute=True).fit(data_xtrain, data_ytrain)
+    #print("Fin du Fit")
+
     # MSE from training and test data
     train_error = mean_squared_error(data_ytrain, model.predict(data_xtrain))
     test_error = mean_squared_error(data_ytest, model.predict(data_xtest))
@@ -294,3 +307,83 @@ def lasso(data_xtrain, data_xtest, data_ytrain, data_ytest):
     print('R2 score: %.3f' % R2)
 
     return RMSE, MSE, R2
+
+def testCV(data_xtrain, data_xtest, data_ytrain, data_ytest):
+        
+    model = linear_model.SGDRegressor()
+    #axe_X = np.arange(0.1, 0.5, 0.1)
+    #param_grid = {'n_neighbors':axe_X }
+    
+    param_grid = [{'alpha' : 10.0**-np.arange(1,7),
+                   'l1_ratio':[.05, .15, .5, .7, .9, .95, .99, 1]}]
+        
+    #dictionnaire = {'C':axe_X, 'epsilon':axe_X }
+
+    score = 'neg_mean_squared_error'
+
+    clf = GridSearchCV(model, param_grid=param_grid, cv=5, scoring=score, refit=True)
+    
+    clf.fit(data_xtrain, data_ytrain)
+    best_params = clf.best_params_
+    score = sqrt(abs(clf.best_score_))
+    
+    score_MSE = []
+    
+    for a, c in zip(clf.cv_results_['mean_test_score'], clf.cv_results_['params']):
+        print("\t%s %s %s pour %s" % ('\tGRIDSCORES\t',  "RMSE" , sqrt(abs(a)), c))
+        score_MSE.append(sqrt(abs(a)))
+    
+    print('\n\t\t%s\t%f' % (str(best_params), abs(score)))
+    
+#    plt.figure(1, figsize=(15, 9))
+#
+#    plt.plot(10.0**-np.arange(1,7), score_MSE, label="MSE", color='g')
+#    
+#    plt.title("Grid Search Scores", fontsize=20, fontweight='bold')
+#    plt.xlabel('RMSE', fontsize=16)
+#    plt.ylabel('CV Average Score', fontsize=16)
+#    plt.legend(loc="best", fontsize=15)
+#    plt.grid('on')
+#    plt.show()
+    
+def all(data_xtrain, data_xtest, data_ytrain, data_ytest, compagnie, log):
+        
+    from sklearn.externals import joblib
+
+    log_cols=["Classifier", "Id", "RMSE", "R2"]
+    score = 'neg_mean_squared_error'
+        
+    classifiers = [SGDRegressor(),
+                   LinearRegression(),
+                   ElasticNetCV(),
+                   LassoCV(),
+                   OrthogonalMatchingPursuitCV(),
+                   RidgeCV(scoring=score)]
+    
+    for clf in classifiers:
+        #clf.fit(data_xtrain, data_ytrain)
+        name = clf.__class__.__name__
+        
+        fichier = _DOSSIERTRAVAIL + "\\" + name + "_" + compagnie + ".pkl"
+        
+        #joblib.dump(clf, fichier)
+        
+        clf = joblib.load(fichier) 
+
+        print("="*30)
+        print(name)
+        
+        print('****Resultats****')
+        train_predictions = clf.predict(data_xtest)
+        mse = sqrt(abs(mean_squared_error(data_ytest, train_predictions)))
+        r2 = 100 * r2_score(data_ytest, train_predictions)
+        
+        print("RMSE : ", round(mse, 2))
+        print("Log Loss : ", round(r2, 2))
+        
+        log_entry = pd.DataFrame([[name, compagnie, mse, r2]], columns=log_cols)
+        log = log.append(log_entry)
+            
+        print("="*30)
+    
+    return log
