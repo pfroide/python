@@ -78,7 +78,7 @@ def histogramme(data, colon, limitemin, limitemax):
     classes = np.linspace(-100, 100, 200)
 
     # Ligne rouge verticale
-    plt.plot([0.0, 0], [0, 10000], 'r-', lw=2)
+    plt.plot([0.0, 0], [0, 160000], 'r-', lw=2)
 
     # Données de l'histogramme
     plt.hist(data[colon][np.isfinite(data[colon])], bins=classes)
@@ -298,8 +298,26 @@ def main():
     liste_a_supprimer = ['AIRLINE_ID', 'AIR_TIME', 'ARR_TIME', 'CARRIER_DELAY']
     liste_a_supprimer.extend(['DAY_OF_MONTH', 'DEP_TIME', 'DISTANCE', 'LATE_AIRCRAFT_DELAY'])
     liste_a_supprimer.extend(['NAS_DELAY', 'SECURITY_DELAY', 'WEATHER_DELAY'])
-    liste_a_supprimer.extend(['ORIGIN_CITY_NAME', 'ORIGIN_AIRPORT_ID'])
+    liste_a_supprimer.extend(['ORIGIN_CITY_NAME', 'ORIGIN_AIRPORT_ID', 'CLASSE_DELAY'])
     liste_a_supprimer.extend(['FL_DATE', 'DEST_CITY_NAME', 'DEST_AIRPORT_ID', 'DEP_DELAY'])
+    
+    mask = (data["CARRIER_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
+    data = data.ix[mask]
+    
+    mask = (data["LATE_AIRCRAFT_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
+    data = data.ix[mask]
+    
+    mask = (data["NAS_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
+    data = data.ix[mask]
+    
+    mask = (data["SECURITY_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
+    data = data.ix[mask]
+    
+    mask = (data["WEATHER_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
+    data = data.ix[mask]
+
+    mask = data["ARR_DELAY"] >= -45
+    data = data.ix[mask]
 
     for donnee in liste_a_supprimer:
         del data[donnee]
