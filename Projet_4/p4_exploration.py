@@ -10,36 +10,17 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt, cm as cm
-from sklearn.ensemble import RandomForestRegressor
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\p4\\'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_4\\images'
-_FICHIERDATA = _DOSSIER + '2016_01.csv'
-
-def retard_par_aeroport(data):
-    """
-    TBD
-    """
-
-    airport_mean_delays = pd.DataFrame(pd.Series(data['ORIGIN_AIRPORT_ID'].unique()))
-
-    airport_mean_delays.set_index(0, drop=True, inplace=True)
-
-    airport_mean_delays[airport_mean_delays.index.duplicated()]
-
-    for carrier in data['UNIQUE_CARRIER'].unique():
-        df1 = data[data['UNIQUE_CARRIER'] == carrier]
-        test = df1['ARR_DELAY'].groupby(data['ORIGIN_AIRPORT_ID']).apply(get_stats).unstack()
-        airport_mean_delays[carrier] = test.loc[:, 'mean']
-    
-    return airport_mean_delays
 
 def correlation_matrix(data):
     """
         Fonction qui permet de créer une visualisation du lien entre les
         variables 2 à 2
     """
+
     # Calcule de la matrice
     corr = data.corr()
     cmap = cm.get_cmap('jet', 30)
@@ -94,61 +75,6 @@ def get_stats(param):
             'mean':param.mean()
            }
 
-def relative_importance(data):
-    """
-    TBD
-    """
-
-    # On récupère les features d'un côté...
-    data_x = data.copy()
-    data_x = data_x.drop(['ARR_DELAY'], axis=1)
-
-    for colon in data_x:
-        if data_x[colon].dtype == 'object':
-            del data_x[colon]
-        elif 'DELAY' in colon:
-            del data_x[colon]
-
-    # On enlève les Nan
-    data_x.fillna(0, inplace=True)
-
-    # et les labels de l'autre
-    data_y = data['ARR_DELAY'].copy()
-
-    data_y.fillna(0, inplace=True)
-
-    regr = RandomForestRegressor(max_depth=50, random_state=0)
-    regr.fit(data_x, data_y)
-
-    RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=50,
-                          max_features='auto', max_leaf_nodes=None,
-                          min_impurity_decrease=0.0, min_impurity_split=None,
-                          min_samples_leaf=1, min_samples_split=2,
-                          min_weight_fraction_leaf=0.0, n_estimators=10, n_jobs=1,
-                          oob_score=False, random_state=0, verbose=0, warm_start=False)
-
-    # Isolate feature importances
-    importance = regr.feature_importances_
-
-    # Sort the feature importances
-    sorted_importances = np.argsort(importance)
-
-    # Insert padding
-    names = data_x.columns.values[0:]
-    padding = np.arange(len(names)) + 0.5
-
-    # Customize the plot
-    plt.figure(figsize=(10, 12))
-    plt.yticks(padding, names[sorted_importances])
-    plt.xlabel("Relative Importance")
-    plt.title("Variable Importance")
-
-    # Plot the data
-    plt.barh(padding, importance[sorted_importances], align='center')
-
-    # Show the plot
-    plt.show()
-
 def graphique_par_donnee(data, classifieur):
     """
     TBD
@@ -192,15 +118,35 @@ def graphique_par_donnee(data, classifieur):
     fig = axe.get_figure()
     fig.savefig(fichier_save, dpi=100)
 
+def classification_retards(data):
+    """
+    TBD
+    """
+    
+    # Classification des retards
+    for dataset in data:
+        data.loc[data['ARR_DELAY'] <= 15, 'CLASSE_DELAY'] = "Leger"
+        data.loc[data['ARR_DELAY'] >= 15, 'CLASSE_DELAY'] = "Moyen"
+        data.loc[data['ARR_DELAY'] >= 45, 'CLASSE_DELAY'] = "Important"
+        data.loc[data['ARR_DELAY'] < 0, 'CLASSE_DELAY'] = "En avance"
+
+    # Affichage de la classification des retards
+    f, ax = plt.subplots(1, 2, figsize=(20, 8))
+    data['CLASSE_DELAY'].value_counts().plot.pie(autopct='%1.1f%%', ax=ax[0], shadow=True)
+    ax[0].set_title('CLASSE_DELAY')
+    ax[0].set_ylabel('')
+    sns.countplot('CLASSE_DELAY',order=data['CLASSE_DELAY'].value_counts().index, data=data, ax=ax[1])
+    ax[1].set_title('Status')
+    plt.show()
+    
+    del data['CLASSE_DELAY']
+    
 def main():
     """
     Fonction main
     """
 
     # Récupération des dataset
-    # Pour un mois
-    data = pd.read_csv(_FICHIERDATA, error_bad_lines=False, low_memory=False)
-
     # Pour toute l'année
     data = pd.DataFrame({'A' : []})
     for i in range(1, 13):
@@ -222,7 +168,7 @@ def main():
     data['ORIGIN_AIRPORT_ID'] = data['ORIGIN_AIRPORT_ID'].astype('float', copy=False)
     data['ORIGIN_AIRPORT_ID'] = data['ORIGIN_AIRPORT_ID'].astype('int', copy=False)
 
-    # Liste des critères à conserver
+    # Liste des critères à conserver pour les stats
     liste_criteres = []
     liste_criteres = ['FL_DATE', 'AIRLINE_ID', 'ORIGIN_AIRPORT_ID', 'DEST_AIRPORT_ID']
     liste_criteres.extend(['DEP_TIME', 'DEP_DELAY', 'ARR_TIME', 'ARR_DELAY'])
@@ -232,33 +178,17 @@ def main():
     liste_criteres.extend(['DAY_OF_MONTH', 'UNIQUE_CARRIER', 'DEP_TIME_BLK', 'ARR_TIME_BLK'])
     liste_criteres.extend(['ORIGIN_CITY_NAME', 'DEST_CITY_NAME', 'DISTANCE_GROUP'])
 
-#    liste_criteres = []
-#    liste_criteres = ['FL_DATE', 'AIRLINE_ID']
-#    liste_criteres.extend(['DEP_TIME', 'DEP_DELAY', 'ARR_TIME', 'ARR_DELAY'])
-#    liste_criteres.extend(['ORIGIN', 'DEST'])
-#    liste_criteres.extend(['UNIQUE_CARRIER'])
-
+    # Suppression des colonnes non-selectionnées
     for colon in data:
         if colon not in liste_criteres:
             del data[colon]
 
+    # Suppression des lignes qui seraient en double
     data = data.drop_duplicates(keep='first')
 
-    # Classification des retards        
-    for dataset in data:
-        data.loc[data['ARR_DELAY'] <= 15, 'CLASSE_DELAY'] = "Leger"
-        data.loc[data['ARR_DELAY'] >= 15, 'CLASSE_DELAY'] = "Moyen"
-        data.loc[data['ARR_DELAY'] >= 60, 'CLASSE_DELAY'] = "Important"
-        data.loc[data['ARR_DELAY'] < 0, 'CLASSE_DELAY'] = "En avance"
-    
+    # Classification des retards
     # Affichage de la classification des retards
-    f,ax=plt.subplots(1,2,figsize=(20,8))
-    data['CLASSE_DELAY'].value_counts().plot.pie(autopct='%1.1f%%',ax=ax[0],shadow=True)
-    ax[0].set_title('CLASSE_DELAY')
-    ax[0].set_ylabel('')
-    sns.countplot('CLASSE_DELAY',order = data['CLASSE_DELAY'].value_counts().index, data=data,ax=ax[1])
-    ax[1].set_title('Status')
-    plt.show()
+    classification_retards(data)
 
     # Données manquantes
     print("Données manquantes")
@@ -273,53 +203,64 @@ def main():
     print(data_transpose)
     data_transpose.to_csv(fichier_save)
 
+    # Affichage de la matrice de corrélation
     correlation_matrix(data)
 
-    # Affichage
-    liste_affichage = []
+    # Données pour affichage
     liste_affichage = ['ORIGIN_AIRPORT_ID', 'DEST_AIRPORT_ID', 'MONTH']
-    liste_affichage.extend(['AIRLINE_ID', 'DAY_OF_WEEK'])
-    liste_affichage.extend(['UNIQUE_CARRIER', 'DEP_TIME_BLK', 'ARR_TIME_BLK', 'DISTANCE_GROUP'])
+    liste_affichage.extend(['AIRLINE_ID', 'DAY_OF_WEEK', 'DISTANCE_GROUP'])
+    liste_affichage.extend(['UNIQUE_CARRIER', 'DEP_TIME_BLK', 'ARR_TIME_BLK'])
 
+    # Affichage de graphiques
     for colon in liste_affichage:
         graphique_par_donnee(data, colon)
 
+    # Deuxième partie de l'affichage précédent
     for colon in liste_affichage:
         print("Nb of", colon, " : ", len(data[colon].unique()))
 
     # Création des histogrammes
-    for nom_colonne in data:
-        if data[nom_colonne].dtype == 'float' or data[nom_colonne].dtype == 'int64':
-            if 'DELAY' in nom_colonne:
-                histogramme(data, nom_colonne, -70, 70)
+    histogramme(data, 'ARR_DELAY', -60, 60)
+    histogramme(data, 'DEP_DELAY', -60, 60)
 
-    retards = retard_par_aeroport(data)
+    # Il faut que les différents délais soient inférieurs à 45 min
+    retard_max = 45
+    mask = (data["CARRIER_DELAY"] <= retard_max) | (data["ARR_DELAY"] <= 15)
+    data = data.loc[mask]
 
+    mask = (data["LATE_AIRCRAFT_DELAY"] <= retard_max) | (data["ARR_DELAY"] <= 15)
+    data = data.loc[mask]
+
+    mask = (data["NAS_DELAY"] <= retard_max) | (data["ARR_DELAY"] <= 15)
+    data = data.loc[mask]
+
+    mask = (data["SECURITY_DELAY"] <= retard_max) | (data["ARR_DELAY"] <= 15)
+    data = data.loc[mask]
+
+    mask = (data["WEATHER_DELAY"] <= retard_max) | (data["ARR_DELAY"] <= 15)
+    data = data.loc[mask]
+
+    mask = data["ARR_DELAY"] >= -retard_max
+    data = data.loc[mask]
+
+    mask = data["ARR_DELAY"] <= retard_max
+    data = data.loc[mask]
+    
+    # Préparation de l'exportation des données
     liste_a_supprimer = ['AIRLINE_ID', 'AIR_TIME', 'ARR_TIME', 'CARRIER_DELAY']
-    liste_a_supprimer.extend(['DAY_OF_MONTH', 'DEP_TIME', 'DISTANCE', 'LATE_AIRCRAFT_DELAY'])
+    liste_a_supprimer.extend(['DAY_OF_MONTH', 'DEP_TIME', 'DISTANCE', 'DEP_DELAY'])
     liste_a_supprimer.extend(['NAS_DELAY', 'SECURITY_DELAY', 'WEATHER_DELAY'])
-    liste_a_supprimer.extend(['ORIGIN_CITY_NAME', 'ORIGIN_AIRPORT_ID', 'CLASSE_DELAY'])
-    liste_a_supprimer.extend(['FL_DATE', 'DEST_CITY_NAME', 'DEST_AIRPORT_ID', 'DEP_DELAY'])
-    
-    mask = (data["CARRIER_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
-    data = data.ix[mask]
-    
-    mask = (data["LATE_AIRCRAFT_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
-    data = data.ix[mask]
-    
-    mask = (data["NAS_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
-    data = data.ix[mask]
-    
-    mask = (data["SECURITY_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
-    data = data.ix[mask]
-    
-    mask = (data["WEATHER_DELAY"] <= 45) | (data["ARR_DELAY"] <= 15)
-    data = data.ix[mask]
+    liste_a_supprimer.extend(['ORIGIN_CITY_NAME', 'ORIGIN_AIRPORT_ID', 'ARR_TIME_BLK'])
+    liste_a_supprimer.extend(['FL_DATE', 'DEST_CITY_NAME', 'DEST_AIRPORT_ID'])
+    liste_a_supprimer.extend(['DISTANCE_GROUP', 'LATE_AIRCRAFT_DELAY'])
 
-    mask = data["ARR_DELAY"] >= -45
-    data = data.ix[mask]
-
+    # Suppression
     for donnee in liste_a_supprimer:
         del data[donnee]
-        
-    data.to_csv('C:\\Users\\Toni\\Desktop\\p4_bdd_clean_toni.csv')
+
+    # Classification des retards
+    # Affichage de la classification des retards
+    classification_retards(data)
+    
+    # Export
+    data.to_csv('C:\\Users\\Toni\\Desktop\\dataset_p4.csv')
