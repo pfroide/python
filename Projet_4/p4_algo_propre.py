@@ -36,10 +36,10 @@ _DOSSIERIMAGE = 'C:\\Users\\Toni\\python\\python\\Projet_4\\images'
 _FICHIERDATA = _DOSSIER + 'dataset_p4.csv'
 _VERBOSE = 10
 
-# Booleéan pour faire la différence entre un fit et un joblib load
-_FITSAVE_SANS = False
-_FITSAVE_AVEC = False
-    
+# Booléean pour faire la différence entre un fit et un joblib load
+_RECALCUL_JOBLIB = False
+_RECALCUL_JOBLIB_HYP = False
+
 def main():
     """
     Fonction main
@@ -62,53 +62,6 @@ def main():
     # Affichages
     affichage_resultats(log.pivot(index='Id', columns='Classifier', values='RMSE'))
     affichage_resultats(log.pivot(index='Classifier', columns='Id', values='RMSE'))
-
-def affichage_resultats(log_pivot):
-    """
-    Diagrammes en batons pour voir les résultats
-    """
-
-    for nom_colonne in log_pivot:
-        plt.figure(figsize=(12, 8))
-
-        data_colonne = log_pivot[nom_colonne]
-
-        # Données de l'axe X
-        x_axis = [k for k, i in enumerate(data_colonne)]
-        x_label = [i for i in data_colonne.index]
-
-        # Données de l'axe Y
-        y_axis = [i for i in data_colonne]
-
-        # Largeur des barres
-        width = 0.2
-
-        # Légende de l'axe X
-        plt.xticks(x_axis, x_label, rotation=90)
-
-        # Création
-        rects = plt.bar(x_axis, y_axis, width, color='b')
-
-        # On fait les labels pour les afficher
-        labels = ["%.2f" % i for i in data_colonne]
-        
-        for rect, label in zip(rects, labels):
-            height = rect.get_height()
-            width = rect.get_width()
-            
-            plt.text(rect.get_x()+ width/2, height + 0.1, label, ha='center', va='bottom')
-            
-        # Barres horizontales
-        plt.axhline(y=sum(data_colonne)/len(data_colonne), color='r', linestyle='-')
-        plt.axhline(y=min(data_colonne), color='g', linestyle='-')
-    
-        # Esthétisme
-        plt.grid()
-        plt.ylabel('RMSE')
-        plt.title(nom_colonne)
-        plt.tight_layout()
-        plt.savefig(_DOSSIERIMAGE + "//_Bar_" + nom_colonne)
-        plt.show()
 
 def lancer_algorithme(data):
     """
@@ -164,7 +117,7 @@ def lancer_algorithme(data):
 
         # Fonction qui permets de faire les CV
         log_cv = appel_cvs(xtrain, ytrain, compagnie)
-    
+
     return log, log_cv
 
 def algo_wo_optimisation(xtrain, xtest, ytrain, ytest, compagnie, log):
@@ -191,10 +144,13 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest, compagnie, log):
         fichier = _DOSSIERPKL + "\\" + name + "_" + compagnie + ".pkl"
 
         # Choix entre fit de nouveau ou aller chercher le fit sauvegardé
-        if _FITSAVE_SANS is True:
+        if _RECALCUL_JOBLIB is True:
+            # Fit
             clf.fit(xtrain, ytrain)
+            # Dump (sauvegarde)
             joblib.dump(clf, fichier)
         else:
+            # On va chercher le dump
             clf = joblib.load(fichier)
 
         print("="*40)
@@ -209,7 +165,7 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest, compagnie, log):
 
         # Affichage des scores de prédictions
         print("RMSE : ", round(mse, 4))
-        print("Log Loss : ", round(score2, 3))
+        print("R2 : ", round(score2, 3))
 
         # Sauvegarde des scores de predictions
         log_entry = pd.DataFrame([[name, compagnie, mse, score2]], columns=log.columns)
@@ -219,7 +175,7 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest, compagnie, log):
 
 def appel_cvs(xtrain, ytrain, compagnie):
     """
-    TBD
+    Fonction qui fournit les hyperparamètres aux modèles et appelle les fonctions
     """
 
     # Choix de l'algorithme de régression : SGDRegressor et hyperparamètres
@@ -228,32 +184,39 @@ def appel_cvs(xtrain, ytrain, compagnie):
                    'l1_ratio':[.05, .15, .5, .7, .9, .95, .99, 1]
                   }]
 
-    
     # Appel de fonction avec le SGDRegressor
     log_cv = algos_cv(xtrain, ytrain, model, param_grid, compagnie)
-    
+
      # Choix de l'algorithme de régression : Ridge et hyperparamètres
     model = Ridge()
     param_grid = {'alpha': np.logspace(-7, 7, 15)}
-    
+
     # Appel de fonction avec le Ridge
     log_cv = algos_cv(xtrain, ytrain, model, param_grid, compagnie)
-    
+
     # Choix de l'algorithme de régression RFR et hyperparamètres
     model = RandomForestRegressor()
-    param_grid = {'max_depth': range(3,6),
+    param_grid = {'max_depth': range(3, 6),
                   'min_samples_split': range(3, 6)}
-    
+
     # Appel de fonction avec le RandomForestRegressor
     log_cv = algos_cv(xtrain, ytrain, model, param_grid, compagnie)
-    
+
+    # Choix de l'algorithme de régression Lasso et hyperparamètres
+    model = LassoCV()
+    param_grid = {'eps': [1e-1, 1e-2, 1e-3],
+                  'n_alphas': range(2, 6)}
+
+    # Appel de fonction avec le RandomForestRegressor
+    log_cv = algos_cv(xtrain, ytrain, model, param_grid, compagnie)
+
     return log_cv
 
 def algos_cv(xtrain, ytrain, model, param_grid, compagnie):
     """
     TBD
     """
-        
+
     # Score à améliorer
     score = 'neg_mean_squared_error'
 
@@ -270,10 +233,9 @@ def algos_cv(xtrain, ytrain, model, param_grid, compagnie):
     fichier = _DOSSIERPKL + "\\Hyp_" + model.__class__.__name__ + "_" + compagnie + ".pkl"
 
     # Choix entre fit de nouveau ou aller chercher le fit sauvegardé
-    if _FITSAVE_AVEC is True:
+    if _RECALCUL_JOBLIB_HYP is True:
         # Fit
         clf.fit(xtrain, ytrain)
-        
         # Dump du fichier
         joblib.dump(clf, fichier)
     else:
@@ -326,7 +288,7 @@ def affichage_rmse(model, log_cv, compagnie):
 
     # Limite de l'axe Y
     plt.ylim(min(log_cv['RMSE'])-0.5, max(log_cv['RMSE'])+0.5)
-    
+
     # Largeur des barres
     width = 0.2
 
@@ -338,13 +300,13 @@ def affichage_rmse(model, log_cv, compagnie):
 
     # On fait les labels pour les afficher
     labels = ["%.2f" % i for i in data_colonne]
-    
+
     for rect, label in zip(rects, labels):
         height = rect.get_height()
         width = rect.get_width()
-        
+
         plt.text(rect.get_x()+ width/2, height + 0.1, label, ha='center', va='bottom')
-        
+
     # Barres horizontales
     plt.axhline(y=sum(data_colonne)/len(data_colonne), color='r', linestyle='-')
     plt.axhline(y=min(data_colonne), color='g', linestyle='-')
@@ -358,133 +320,49 @@ def affichage_rmse(model, log_cv, compagnie):
     plt.savefig(_DOSSIERIMAGE + "\\_RMSE_" + model.__class__.__name__ + "_" + compagnie)
     plt.show()
 
-#def cv_sgd(xtrain, xtest, ytrain, ytest):
-#    """
-#    TBD
-#    """
-#
-#    # Choix de l'algorithme de régression : SGDRegressor
-#    model = linear_model.SGDRegressor()
-#
-#    # Hyperparamètres
-#    param_grid = [{'alpha' : 10.0**-np.arange(1, 7),
-#                   'l1_ratio':[.05, .15, .5, .7, .9, .95, .99, 1]
-#                  }]
-#
-#    # Score à améliorer
-#    score = 'neg_mean_squared_error'
-#
-#    # Options de l'algorithme
-#    clf = GridSearchCV(model,
-#                       param_grid=param_grid,
-#                       verbose=5,
-#                       cv=5,
-#                       scoring=score,
-#                       refit=True,
-#                       return_train_score=False)
-#
-#    # Fit
-#    clf.fit(xtrain, ytrain)
-#
-#    # Liste qui va garder les résultats
-#    log_cols = ["RMSE", "Hyperparametres"]
-#    log = pd.DataFrame(columns=log_cols)
-#
-#    # Affichages
-#    for mse, params in zip(clf.cv_results_['mean_test_score'], clf.cv_results_['params']):
-#        print("RMSE : ", round(sqrt(abs(mse)), 4), "pour", params)
-#
-#        # Sauvegarde des scores de predictions
-#        log_entry = pd.DataFrame([[sqrt(abs(mse)), params]], columns=log.columns)
-#        log = log.append(log_entry)
-#
-#    # Meilleurs paramètres
-#    score_max = round(sqrt(abs(clf.best_score_)), 4)
-#    print("\nMeilleur score : ", score_max, "pour", clf.best_params_)
-#
-#def cv_ridge(xtrain, xtest, ytrain, ytest):
-#    """
-#    Choix de l'algorithme de régression : Ridge
-#    """
-#
-#    # Choix de l'algorithme de régression : Ridge
-#    model = Ridge()
-#
-#    # Hyperparamètres
-#    param_grid = {'alpha': np.logspace(-7, 7, 15)}
-#
-#    # Score à améliorer
-#    score = 'neg_mean_squared_error'
-#
-#    # Options de l'algorithme
-#    clf = GridSearchCV(model,
-#                       param_grid,
-#                       cv=5,
-#                       verbose=5,
-#                       scoring=score,
-#                       return_train_score=False)
-#
-#    # Fit
-#    clf.fit(xtrain, ytrain)
-#
-#    # Liste qui va garder les résultats
-#    log_cols = ["RMSE", "Hyperparametres"]
-#    log = pd.DataFrame(columns=log_cols)
-#
-#    # Affichages
-#    for mse, params in zip(clf.cv_results_['mean_test_score'], clf.cv_results_['params']):
-#        print("RMSE : ", round(sqrt(abs(mse)), 4), "pour", params)
-#
-#        # Sauvegarde des scores de predictions
-#        log_entry = pd.DataFrame([[sqrt(abs(mse)), params]], columns=log.columns)
-#        log = log.append(log_entry)
-#
-#    # Meilleurs paramètres
-#    score_max = round(sqrt(abs(clf.best_score_)), 4)
-#    print("\nMeilleur score : ", score_max, "pour", clf.best_params_)
-#
-#def cv_randomforest(xtrain, xtest, ytrain, ytest):
-#    """
-#    TBD
-#    """
-#
-#    # Choix de l'algorithme de régression
-#    model = RandomForestRegressor()
-#
-#    # Score à améliorer
-#    score = 'neg_mean_squared_error'
-#
-#    # Hyperparamètres
-#    param_grid = {'max_depth': range(12,23),
-#                  'min_samples_split': range(12,23)}
-#
-#    # 'n_estimators': [500, 700, 1000],
-#    # Options de l'algorithme
-#    clf = GridSearchCV(model,
-#                       param_grid,
-#                       cv=5,
-#                       verbose=5,
-#                       scoring=score,
-#                       return_train_score=False)
-#
-#    # Fit
-#    clf.fit(xtrain, ytrain)
-#
-#    # Liste qui va garder les résultats
-#    log_cols = ["RMSE", "Hyperparametres"]
-#    log = pd.DataFrame(columns=log_cols)
-#
-#    # Affichages
-#    for mse, params in zip(clf.cv_results_['mean_test_score'], clf.cv_results_['params']):
-#        print("RMSE : ", round(sqrt(abs(mse)), 4), "pour", params)
-#
-#        # Sauvegarde des scores de predictions
-#        log_entry = pd.DataFrame([[sqrt(abs(mse)), params]], columns=log.columns)
-#        log = log.append(log_entry)
-#
-#    # Meilleurs paramètres
-#    score_max = round(sqrt(abs(clf.best_score_)), 4)
-#    print("\nMeilleur score : ", score_max, "pour", clf.best_params_)
-#
-#    #
-#    affichage_rmse(log)
+def affichage_resultats(log_pivot):
+    """
+    Diagrammes en batons pour voir les résultats
+    """
+
+    for nom_colonne in log_pivot:
+        plt.figure(figsize=(12, 8))
+
+        data_colonne = log_pivot[nom_colonne]
+
+        # Données de l'axe X
+        x_axis = [k for k, i in enumerate(data_colonne)]
+        x_label = [i for i in data_colonne.index]
+
+        # Données de l'axe Y
+        y_axis = [i for i in data_colonne]
+
+        # Largeur des barres
+        width = 0.2
+
+        # Légende de l'axe X
+        plt.xticks(x_axis, x_label, rotation=90)
+
+        # Création
+        rects = plt.bar(x_axis, y_axis, width, color='b')
+
+        # On fait les labels pour les afficher
+        labels = ["%.2f" % i for i in data_colonne]
+
+        for rect, label in zip(rects, labels):
+            height = rect.get_height()
+            width = rect.get_width()
+
+            plt.text(rect.get_x()+ width/2, height + 0.1, label, ha='center', va='bottom')
+
+        # Barres horizontales
+        plt.axhline(y=sum(data_colonne)/len(data_colonne), color='r', linestyle='-')
+        plt.axhline(y=min(data_colonne), color='g', linestyle='-')
+
+        # Esthétisme
+        plt.grid()
+        plt.ylabel('RMSE')
+        plt.title(nom_colonne)
+        plt.tight_layout()
+        plt.savefig(_DOSSIERIMAGE + "//_Bar_" + nom_colonne)
+        plt.show()
