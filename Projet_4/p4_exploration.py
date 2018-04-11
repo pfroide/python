@@ -258,9 +258,14 @@ def main():
     for donnee in liste_a_supprimer:
         del data[donnee]
 
-    # Classification des retards
     # Affichage de la classification des retards
     classification_retards(data)
+
+    #     
+    df_copy = data.copy()
     
-    # Export
-    data.to_csv('C:\\Users\\Toni\\Desktop\\dataset_p4.csv')
+    #
+    for cp in data['UNIQUE_CARRIER'].unique():
+        # Export - On ne garde que les données pour 1 compagnie à la fois
+        df_copy = data[data['UNIQUE_CARRIER'] == cp]
+        df_copy.to_csv('C:\\Users\\Toni\\Desktop\\dataset_p4_' + cp + '.csv')
