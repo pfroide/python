@@ -30,7 +30,7 @@ from sklearn.externals import joblib
 warnings.filterwarnings("ignore")
 
 # Lieu où se trouve le fichier
-_DOSSIER = 'C:\\Users\\Toni\\Desktop\\'
+_DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p4\\'
 _DOSSIERPKL = 'C:\\Users\\Toni\\python\\python\\Projet_4\\pkl'
 _DOSSIERIMAGE = 'C:\\Users\\Toni\\python\\python\\Projet_4\\images'
 _FICHIERDATA = _DOSSIER + 'dataset_p4.csv'
@@ -38,7 +38,7 @@ _VERBOSE = 10
 
 # Booléean pour faire la différence entre un fit et un joblib load
 _RECALCUL_JOBLIB = False
-_RECALCUL_JOBLIB_HYP = False
+_RECALCUL_JOBLIB_HYP = True
 
 def main():
     """
@@ -57,7 +57,7 @@ def main():
     print(log_cv)
 
     # On enlève un regresseur hors-norme
-    log = log[log['Classifier'] != 'LinearRegression']
+    #log = log[log['Classifier'] != 'LinearRegression']
 
     # Affichages
     affichage_resultats(log.pivot(index='Id', columns='Classifier', values='RMSE'))
@@ -127,11 +127,11 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest, compagnie, log):
     """
 
     classifiers = [SGDRegressor(),
-                   AdaBoostRegressor(),
-                   LinearRegression(),
+                   #AdaBoostRegressor(),
+                   #LinearRegression(),
                    ElasticNetCV(),
                    LassoCV(),
-                   OrthogonalMatchingPursuitCV(),
+                   #OrthogonalMatchingPursuitCV(),
                    RidgeCV(),
                    RandomForestRegressor()]
 
@@ -180,8 +180,9 @@ def appel_cvs(xtrain, ytrain, compagnie):
 
     # Choix de l'algorithme de régression : SGDRegressor et hyperparamètres
     model = SGDRegressor()
-    param_grid = [{'alpha' : 10.0**-np.arange(1, 7),
-                   'l1_ratio':[.05, .15, .5, .7, .9, .95, .99, 1]
+    param_grid = [{'alpha' : 10.0**-np.arange(1, 5),
+                   'l1_ratio':[.05, .15, .5, .95, 1],
+                   'penalty': ['none', 'l2', 'l1', 'elasticnet']
                   }]
 
     # Appel de fonction avec le SGDRegressor
