@@ -12,7 +12,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt, cm as cm
 
 # Lieu où se trouve le fichier
-_DOSSIER = 'C:\\Users\\Toni\\Desktop\\p4\\'
+_DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p4\\'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_4\\images'
 
 def correlation_matrix(data):
@@ -37,6 +37,8 @@ def correlation_matrix(data):
 
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
     plt.colorbar(cax, ticks=[-0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])
+    plt.tight_layout()
+    plt.savefig(_DOSSIERTRAVAIL + '\\matrix', dpi=100)
     plt.show()
 
 def histogramme(data, colon, limitemin, limitemax):
@@ -63,6 +65,7 @@ def histogramme(data, colon, limitemin, limitemax):
 
     # Données de l'histogramme
     plt.hist(data[colon][np.isfinite(data[colon])], bins=classes)
+    plt.tight_layout()
     plt.savefig(fichier_save, dpi=100)
 
 def get_stats(param):
@@ -116,6 +119,7 @@ def graphique_par_donnee(data, classifieur):
 
     # Sauvegarde de la figure
     fig = axe.get_figure()
+    plt.tight_layout()
     fig.savefig(fichier_save, dpi=100)
 
 def classification_retards(data):
@@ -137,6 +141,8 @@ def classification_retards(data):
     ax[0].set_ylabel('')
     sns.countplot('CLASSE_DELAY',order=data['CLASSE_DELAY'].value_counts().index, data=data, ax=ax[1])
     ax[1].set_title('Status')
+    plt.tight_layout()
+    plt.savefig(_DOSSIERTRAVAIL + '\\' + 'classification_retards', dpi=100)
     plt.show()
     
     del data['CLASSE_DELAY']
@@ -192,10 +198,12 @@ def main():
 
     # Données manquantes
     print("Données manquantes")
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'missing_data.csv'
     missing_data = data.isnull().sum(axis=0).reset_index()
     missing_data.columns = ['column_name', 'missing_count']
     missing_data['filling_factor'] = (data.shape[0]-missing_data['missing_count'])/data.shape[0]*100
-    missing_data.sort_values('filling_factor').reset_index(drop=True)
+    print(missing_data.sort_values('filling_factor').reset_index(drop=True))
+    missing_data.sort_values('filling_factor').reset_index(drop=True).to_csv(fichier_save)
 
     # Transposition du dataframe de données pour l'analyse univariée
     fichier_save = _DOSSIERTRAVAIL + '\\' + 'transposition.csv'
