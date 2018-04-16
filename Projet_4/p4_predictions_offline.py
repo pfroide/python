@@ -13,7 +13,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Lieu où se trouve le fichier
-_DOSSIER = 'C:\\Users\\Toni\\Desktop\\'
+_DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p4\\'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_4\\pkl'
 _FICHIERDATA = _DOSSIER + 'dataset_p4.csv'
 
