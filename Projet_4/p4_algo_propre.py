@@ -38,7 +38,7 @@ _VERBOSE = 10
 
 # Booléean pour faire la différence entre un fit et un joblib load
 _RECALCUL_JOBLIB = False
-_RECALCUL_JOBLIB_HYP = True
+_RECALCUL_JOBLIB_HYP = False
 
 def main():
     """
@@ -63,6 +63,15 @@ def main():
     affichage_resultats(log.pivot(index='Id', columns='Classifier', values='RMSE'))
     affichage_resultats(log.pivot(index='Classifier', columns='Id', values='RMSE'))
 
+    # Modèle retenu :
+    # SGDRegressor
+    #
+    # Avec les hyperparamètres suivants :
+    #
+    # alpha = 0,001
+    # l1_ratio = 0,5
+    # penalty = ‘none’
+
 def lancer_algorithme(data):
     """
     Fonction de calcul pour tous les algorithmes différents pour chaque compagnie
@@ -74,7 +83,7 @@ def lancer_algorithme(data):
 
     # Création de la liste (unique) des compagnies aériennes
     liste = data['UNIQUE_CARRIER'].unique()
-
+    
     for compagnie in liste:
 
         # Copie de sauvegarde
@@ -133,8 +142,9 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest, compagnie, log):
                    LassoCV(),
                    #OrthogonalMatchingPursuitCV(),
                    RidgeCV(),
-                   RandomForestRegressor()]
-
+                   RandomForestRegressor()
+                   ]
+                           
     for clf in classifiers:
 
         # Nom du classifieur
@@ -181,8 +191,7 @@ def appel_cvs(xtrain, ytrain, compagnie):
     # Choix de l'algorithme de régression : SGDRegressor et hyperparamètres
     model = SGDRegressor()
     param_grid = [{'alpha' : 10.0**-np.arange(1, 5),
-                   'l1_ratio':[.05, .15, .5, .95, 1],
-                   'penalty': ['none', 'l2', 'l1', 'elasticnet']
+                   'l1_ratio':[0, .1, .5, .9, 1],
                   }]
 
     # Appel de fonction avec le SGDRegressor
@@ -197,8 +206,8 @@ def appel_cvs(xtrain, ytrain, compagnie):
 
     # Choix de l'algorithme de régression RFR et hyperparamètres
     model = RandomForestRegressor()
-    param_grid = {'max_depth': range(3, 6),
-                  'min_samples_split': range(3, 6)}
+    param_grid = {'max_depth': [None, 10, 20],
+                  'n_estimators': [5, 20, 35]}
 
     # Appel de fonction avec le RandomForestRegressor
     log_cv = algos_cv(xtrain, ytrain, model, param_grid, compagnie)
