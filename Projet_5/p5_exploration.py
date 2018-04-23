@@ -9,34 +9,31 @@ Created on Mon Apr 16 19:21:40 2018
 import datetime
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt, cm as cm
-
+from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn import metrics
-from sklearn.neighbors import NearestNeighbors
 from sklearn import preprocessing
-from sklearn.metrics import silhouette_samples, silhouette_score
-import json
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p5\\'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_5\\images'
 
-def dbscan(X, sp):
+def dbscan(data_x, nb_samples):
     """
-    TBD
+    Test de l'algorithme dbscan
     """
 
-    from sklearn.cluster import DBSCAN
-    from sklearn.preprocessing import StandardScaler
-
-    X = StandardScaler().fit_transform(X)
+    data_x = StandardScaler().fit_transform(data_x)
 
     # Compute DBSCAN
-    db = DBSCAN(eps=0.5, min_samples=sp).fit(X)
-    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    core_samples_mask[db.core_sample_indices_] = True
-    labels = db.labels_
+    var_db = DBSCAN(eps=0.5, min_samples=nb_samples).fit(data_x)
+    core_samples_mask = np.zeros_like(var_db.labels_, dtype=bool)
+    core_samples_mask[var_db.core_sample_indices_] = True
+    labels = var_db.labels_
     #print(labels)
 
     # Number of clusters in labels, ignoring noise if present.
@@ -44,10 +41,10 @@ def dbscan(X, sp):
     mask = (labels == -1)
     reste = -sum(labels[mask])
 
-    print('N =', sp)
+    print('N =', nb_samples)
     print('Estimated number of clusters: %d' % n_clusters_)
     print('Nombre sans clusters : %d' % reste)
-    print("Silhouette Coefficient: %0.3f" % metrics.silhouette_score(X, labels))
+    print("Silhouette Coeff : %0.3f" % metrics.silhouette_score(data_x, labels))
 
     # Nouvelle colonne avec les conclusions de kmeans
     #X['labels'] = labels
@@ -56,21 +53,18 @@ def dbscan(X, sp):
 
 def affichage_kmeans(datanum, vmin, vmax, step):
     """
-    TBD
+    Test de l'algorithme kmeans et affichage de la méthode du coude.
     """
 
+    # Variables
     listing = dict()
     distortions = []
 
-    from sklearn.preprocessing import MinMaxScaler
-
-    #
-    std_scale = MinMaxScaler().fit(datanum)
-    X_scaled = std_scale.transform(datanum)
-
     # Scale des données obligatoire avant la réduction des dimensions
-    #std_scale = preprocessing.StandardScaler().fit(datanum)
+    #std_scale = MinMaxScaler().fit(datanum)
     #X_scaled = std_scale.transform(datanum)
+    std_scale = preprocessing.StandardScaler().fit(datanum)
+    x_scaled = std_scale.transform(datanum)
 
     # Réduction t-Sne
     #print("Computing t-SNE embedding")
@@ -86,18 +80,18 @@ def affichage_kmeans(datanum, vmin, vmax, step):
                         max_iter=500,
                         random_state=10)
 
-        kmeans.fit(X_scaled)
+        kmeans.fit(x_scaled)
         # Nouvelle colonne avec les conclusions de kmeans
         datanum['labels'] = kmeans.labels_
 
         # Initialize the clusterer with n_clusters value and a random generator
         # seed of 10 for reproducibility.
-        cluster_labels = kmeans.fit_predict(X_scaled)
+        cluster_labels = kmeans.fit_predict(x_scaled)
 
         # The silhouette_score gives the average value for all the samples.
         # This gives a perspective into the density and separation of the formed
         # clusters
-        silhouette_avg = silhouette_score(X_scaled, cluster_labels)
+        silhouette_avg = silhouette_score(x_scaled, cluster_labels)
         print("For n_clusters =", i,
               "The average silhouette_score is :", round(silhouette_avg, 3))
 
@@ -122,7 +116,7 @@ def affichage_kmeans(datanum, vmin, vmax, step):
 
 def histogramme(data, colon):
     """
-    TBD
+    Affichage d'histogrammes
     """
 
     fichier_save = _DOSSIERTRAVAIL + '\\' + 'histogram_' + colon
@@ -141,10 +135,132 @@ def histogramme(data, colon):
     # plt.hist(data[colon], bins=bin_values)
     plt.savefig(fichier_save, dpi=100)
 
-def calcul_dates(data, res6):
+def creation_intervalles_days(df_num, nom_colonne, depart_point, frequence, nb_periods):
+    """
+    Création des intervalles (pour les jours) où vont être mis les variables
+    de durée
+    """
+
+    # Convertion de la Série d'entrée en DataFrame
+    datatemp = pd.DataFrame(df_num[nom_colonne]).astype('datetime64[ns]')
+
+    # Intervalles
+    bins_dt = pd.date_range(depart_point,
+                            freq=frequence,
+                            periods=nb_periods
+                           )
+    bins_str = bins_dt.astype(str).values
+
+    # Labels des intervalles
+    labels = ['({}, {}]'.format(bins_str[i-1], bins_str[i]) for i in range(1, len(bins_str))]
+
+    # Nom des nouvelles colonnes pour préparer le one-hot encoding
+    new_column_name = 'interval_' + nom_colonne
+
+    # df.Date.astype(np.int64)//10**9 - converts datetime values into UNIX epoch
+    datatemp[new_column_name] = pd.cut(datatemp[nom_colonne].astype(np.int64)//10**9,
+                                       bins=bins_dt.astype(np.int64)//10**9,
+                                       labels=labels
+                                      )
+
+    # Suppression de la colonne qui existe déjà dans le dataframe final
+    del datatemp[nom_colonne]
+
+    # Insertion dans le dataframe qui existait auparavant
+    df_num = df_num.join(datatemp, how='right')
+
+    return df_num
+
+def comparaison(datatemp, ligne, colonne):
+    """
+    Fonction qui déterminer l'intervalle horaire de l'horaire en entrée
+    """
+
+    # Cinq comparaisons pour connaitre l'intervalle horaire
+    if datatemp.loc[str(ligne), colonne].hour < 8:
+        return '[00:00 - 08:00)'
+    elif datatemp.loc[str(ligne), colonne].hour < 12:
+        return '[08:00 - 12:00)'
+    elif datatemp.loc[str(ligne), colonne].hour < 16:
+        return '[12:00 - 16:00)'
+    elif datatemp.loc[str(ligne), colonne].hour < 20:
+        return '[16:00 - 20:00)'
+    #Sinon
+    return '[20:00 - 00:00)'
+
+def creation_intervalles_heures(df_num, nom_colonne):
+    """
+    Appel de la fonction pour désigner l'intervalle horaire
+    """
+
+    # Convertion de la Série d'entrée en DataFrame
+    datatemp = pd.DataFrame(df_num[nom_colonne])
+
+    # Nom des nouvelles colonnes pour préparer le one-hot encoding
+    new_column_name = 'interval_' + nom_colonne
+
+    # Pour tous les index, on recherche les données
+    for ligne in datatemp.index:
+        datatemp.loc[str(ligne), new_column_name] = comparaison(datatemp, ligne, nom_colonne)
+
+    # Suppression de la colonne qui existe déjà dans le dataframe final
+    del datatemp[nom_colonne]
+
+    # Insertion dans le dataframe qui existait auparavant
+    df_num = df_num.join(datatemp, how='right')
+
+    return df_num
+
+def calcul_sommes(data, df_num):
     """
     Fonction qui va gérer toutes les informations retirées graçe aux dates
-        * nb_jour_entre_2_achats
+    """
+
+    # Colonnes que l'on va créer dans le dataframe vide
+    colonnes = ['valeur_facture_1',
+                'valeur_facture_2',
+                'valeur_last_facture'
+               ]
+
+    # Création d'un dataframe vide
+    datatemp = pd.DataFrame(columns=colonnes)
+
+    # Création de la liste des valeurs des factures
+    aggregations = {'TotalAmount':'sum'}
+    liste_amounts = data.groupby('InvoiceNo').agg(aggregations)
+
+    # Pour tous les index, on recherche les données
+    for ligne in df_num.index:
+        # Récupération de toutes les dates d'achats
+        liste_factures = pd.Series(data['InvoiceNo'][data['CustomerID'] == float(ligne)].unique())
+
+        # Récupération de la valeur de la première facture, case 0
+        premiere_facture = liste_amounts.loc[liste_factures[0]][0]
+
+        # Et on rajoute ça dans le dataframe créé pour ça
+        datatemp.loc[str(ligne), colonnes[0]] = premiere_facture
+
+        # Récupération de la valeur d'autres factures
+        if len(liste_factures) > 1:
+            # Facture n°2
+            deuxieme_facture = liste_amounts.loc[liste_factures[1]][0]
+
+            # Dernière facture
+            derniere_facture = liste_amounts.loc[liste_factures[len(liste_factures)-1]][0]
+
+            # Et on rajoute ça dans le dataframe créé pour ça
+            datatemp.loc[str(ligne), colonnes[1]] = deuxieme_facture
+            datatemp.loc[str(ligne), colonnes[2]] = derniere_facture
+
+    # Insertion dans le dataframe qui existait auparavant
+    df_num = df_num.join(datatemp, how='right')
+
+    return df_num
+
+def calcul_dates(data, df_num):
+    """
+    Fonction qui va gérer toutes les informations retirées graçe aux dates
+        * nb_jour_2_achats
         * moyenne_horaire
         * jour_achat_n1
         * heure_achat_n1
@@ -153,21 +269,21 @@ def calcul_dates(data, res6):
     """
 
     # Colonnes que l'on va créer dans le dataframe vide
-    colonnes = ['ecart_moyen_entre_2_achats',
+    colonnes = ['ecart_moy_2_achats',
                 'moyenne_horaire',
                 'jour_achat_n1',
                 'heure_achat_n1',
                 'jour_dernier_achat',
                 'heure_dernier_achat',
-                'ecart_min_entre_2_achats',
-                'ecart_max_entre_2_achats'
+                'ecart_min_2_achats',
+                'ecart_max_2_achats'
                ]
 
     # Création d'un dataframe vide
-    newDF = pd.DataFrame(columns=colonnes)
+    datatemp = pd.DataFrame(columns=colonnes)
 
     # Pour tous les index, on recherche les données
-    for ligne in res6.index:
+    for ligne in df_num.index:
         # Récupération de toutes les dates d'achats
         dates = pd.Series(data['InvoiceDate'][data['CustomerID'] == float(ligne)].unique())
 
@@ -178,7 +294,7 @@ def calcul_dates(data, res6):
         res = []
 
         # Pour toutes les dates, on calcule la différence entre 2 dates
-        for i, p in enumerate(dates):
+        for i, j in enumerate(dates):
             # Pour calculer l'heure moyenne d'achat
             res.append(dates[i].hour*60 + dates[i].minute)
 
@@ -192,6 +308,10 @@ def calcul_dates(data, res6):
                 if ecart_max < dates[i] - dates[i-1]:
                     ecart_max = dates[i] - dates[i-1]
 
+        # Vérification qu'il y a eu plus qu'un achat, sinon on enlève la valeur initiale
+        if ecart_min == datetime.timedelta(500):
+            ecart_min = datetime.timedelta(0)
+
         # On fait la moyenne à la fin
         moyenne = somme / len(dates)
 
@@ -200,24 +320,27 @@ def calcul_dates(data, res6):
         var_minutes = int(sum(res)/len(res) - var_heures*60)
 
         # Et on rajoute ça dans le dataframe créé pour ça
-        newDF.loc[str(ligne), colonnes[0]] = moyenne.days
-        newDF.loc[str(ligne), colonnes[1]] = datetime.time(var_heures,
-                                                           var_minutes)
-        newDF.loc[str(ligne), colonnes[2]] = dates[0].date()
-        newDF.loc[str(ligne), colonnes[3]] = datetime.time(dates[0].hour,
-                                                           dates[0].minute)
-        newDF.loc[str(ligne), colonnes[4]] = dates[len(dates)-1].date()
-        newDF.loc[str(ligne), colonnes[5]] = datetime.time(dates[len(dates)-1].hour,
-                                                           dates[len(dates)-1].minute)
-        newDF.loc[str(ligne), colonnes[6]] = ecart_min.days
-        newDF.loc[str(ligne), colonnes[7]] = ecart_max.days
+        datatemp.loc[str(ligne), colonnes[0]] = moyenne.days
+        datatemp.loc[str(ligne), colonnes[1]] = datetime.time(var_heures,
+                                                              var_minutes)
+        datatemp.loc[str(ligne), colonnes[2]] = dates[0].date()
+        datatemp.loc[str(ligne), colonnes[3]] = datetime.time(dates[0].hour,
+                                                              dates[0].minute)
+        datatemp.loc[str(ligne), colonnes[4]] = dates[len(dates)-1].date()
+        datatemp.loc[str(ligne), colonnes[5]] = datetime.time(dates[len(dates)-1].hour,
+                                                              dates[len(dates)-1].minute)
+        datatemp.loc[str(ligne), colonnes[6]] = ecart_min.days
+        datatemp.loc[str(ligne), colonnes[7]] = ecart_max.days
 
     # Insertion dans le dataframe qui existait auparavant
-    res6 = res6.join(newDF, how='right')
+    df_num = df_num.join(datatemp, how='right')
 
-    return res6
+    return df_num
 
 def main():
+    """
+    Fonction principale
+    """
 
     # Récupération du dataset
     fichier = 'Online Retail.xlsx'
@@ -237,9 +360,6 @@ def main():
     print(data_transpose)
     data_transpose.to_csv(fichier_save)
 
-    # Number of transactions with anonymous customers
-    print(data[data['CustomerID'].isnull()]['InvoiceNo'].unique())
-
     data = data[data['StockCode'] != "AMAZONFEE"]
     data = data[data['Quantity'] > 0]
     data = data[pd.notnull(data['CustomerID'])]
@@ -252,54 +372,92 @@ def main():
     data['InvoiceYearMonth'] = data['InvoiceYear'].map(str) + "-" + data['InvoiceMonth'].map(str)
     data['InvoiceMonthDay'] = data['InvoiceMonth'].map(str) + "-" + data['InvoiceDay'].map(str)
 
+    # Premiers calculs qui sont fait via l'appel d'un dictionnaire
     aggregations = {'TotalAmount':'sum',
                     'Quantity':'sum',
                     'InvoiceNo': ['count', pd.Series.nunique]
-                    #'InvoiceNo': lambda x: x.unique().count()
                    }
 
-    res6 = data.groupby('CustomerID').agg(aggregations)
+    df_num = data.groupby('CustomerID').agg(aggregations)
 
-    res6.columns = ['1', '2', '3', '4']
-    res6 = res6.rename(index=str, columns={"1": "somme_total",
-                                           "2": "nb_article_total",
-                                           "3": "nb_categorie_article_total",
-                                           "4": "nombre_factures"})
+    # Renommage des colonnes du résultat de l'aggrégation
+    df_num.columns = ['1', '2', '3', '4']
+    df_num = df_num.rename(index=str, columns={"1": "somme_total",
+                                               "2": "nb_article_total",
+                                               "3": "nb_categorie_article_total",
+                                               "4": "nb_factures"})
 
-    res6['nb_article_moyen_par_facture'] = res6['nb_article_total']/res6['nombre_factures']
-    res6['somme_moyenne_par_facture'] = res6['somme_total']/res6['nombre_factures']
-    res6['nb_categorie_article_par_facture'] = res6['nb_categorie_article_total']/res6['nombre_factures']
-    res6['somme_moyenne_par_article'] = res6['somme_total']/res6['nb_article_total']
+    # Calculs de moyennes
+    df_num['nb_article_moyen_par_facture'] = df_num['nb_article_total']/df_num['nb_factures']
+    df_num['somme_moyenne_par_facture'] = df_num['somme_total']/df_num['nb_factures']
+    df_num['nb_categorie_article_par_facture'] = df_num['nb_categorie_article_total']/df_num['nb_factures']
+    df_num['somme_moyenne_par_article'] = df_num['somme_total']/df_num['nb_article_total']
 
     # Appel de la fonction qui va gérer tout à partir des dates
-    res6 = calcul_dates(data, res6)
+    df_num = calcul_dates(data, df_num)
 
-    # Formattage en int
-    res6['ecart_moyen_entre_2_achats'] = res6['ecart_moyen_entre_2_achats'].astype(int)
-    res6['ecart_min_entre_2_achats'] = res6['ecart_min_entre_2_achats'].astype(int)
-    res6['ecart_max_entre_2_achats'] = res6['ecart_max_entre_2_achats'].astype(int)
+    # Formatage en int
+    df_num['ecart_moy_2_achats'] = df_num['ecart_moy_2_achats'].astype(int)
+    df_num['ecart_min_2_achats'] = df_num['ecart_min_2_achats'].astype(int)
+    df_num['ecart_max_2_achats'] = df_num['ecart_max_2_achats'].astype(int)
+
+    # Appel de la fonction qui gérer les différentes factures
+    df_num = calcul_sommes(data, df_num)
+
+    # Formatage en intervalle des dates
+    nom_colonne = ['jour_achat_n1', 'jour_dernier_achat']
+
+    # Création des intervalles journaliers pour les nom_colonne ci-dessus
+    for i in range(0, len(nom_colonne)):
+        df_num = creation_intervalles_days(df_num,
+                                           nom_colonne[i],
+                                           '2010-11-01',
+                                           '1M',
+                                           14
+                                          )
+        del df_num[nom_colonne[i]]
+
+    # Formatage en intervalle des heures
+    nom_colonne = ['moyenne_horaire', 'heure_achat_n1', 'heure_dernier_achat']
+
+    # Création des intervalles horaires pour les nom_colonne ci-dessus
+    for i in range(0, len(nom_colonne)):
+        df_num = creation_intervalles_heures(df_num, nom_colonne[i])
+        del df_num[nom_colonne[i]]
 
     # Pour vérifier
     data[data['CustomerID'] == 12347]
     data['InvoiceNo'][data['CustomerID'] == 12347].count()
 
+    # One-Hot encoding
+    liste_criteres = ['interval_moyenne_horaire',
+                      'interval_jour_achat_n1',
+                      'interval_heure_achat_n1',
+                      'interval_jour_dernier_achat',
+                      'interval_heure_dernier_achat'
+                     ]
+    df_num = pd.get_dummies(data=df_num, columns=liste_criteres)
+
     # Méthode du KMeans (coude)
-    #res6.fillna(0, inplace=True)
-    res, dico = affichage_kmeans(res6, 3, 30, 1)
+    df_num.fillna(0, inplace=True)
+    res, dico = affichage_kmeans(df_num, 3, 40, 1)
 
     # Répartition des labels
-    histogramme(res6, 'labels')
+    histogramme(df_num, 'labels')
 
     # Tester dbscan
-    for i in range(1, 15):
-        liste = dbscan(res6, i)
+    for i in range(1, 25):
+        liste = dbscan(df_num, i)
 
-    res7 = res6.groupby('labels').size().reset_index(name='nb')
-    res7 = res6.groupby(['labels', 'nombre_factures']).size().reset_index(name='nb')
+#    res7 = df_num.groupby('labels').size().reset_index(name='nb')
+#    res7 = df_num.groupby(['labels', 'nb_factures']).size().reset_index(name='nb')
 
-    table = pd.pivot_table(res8,
-                           values=["nombre_factures", "nb_article_total", "somme_total"],
-                           index="CustomerID")
+#    table = pd.pivot_table(res8,
+#                           values=["nb_factures", "nb_article_total", "somme_total"],
+#                           index="CustomerID")
+
+#    # Number of transactions with anonymous customers
+#    print(data[data['CustomerID'].isnull()]['InvoiceNo'].unique())
 
 #    # Total number of transactions
 #    len(data['InvoiceNo'].unique())
@@ -340,65 +498,3 @@ def main():
 #                    'InvoiceNo':'count',
 #                    #'date': lambda x: max(x) - 1
 #                   }
-
-#def calcul_dates(data, res6):
-#    """
-#    Fonction qui va gérer toutes les informations retirées graçe aux dates
-#        * nb_jour_entre_2_achats
-#        * moyenne_horaire
-#        * jour_achat_n1
-#        * heure_achat_n1
-#        * jour_dernier_achat
-#        * heure_dernier_achat
-#    """
-#
-#    # Création d'un dataframe avec une colonne vide
-#    newDF1 = pd.DataFrame(res6.index, columns=['nb_jour_entre_2_achats'])
-#    newDF2 = pd.DataFrame(res6.index, columns=['moyenne_horaire'])
-#    newDF3 = pd.DataFrame(res6.index, columns=['jour_achat_n1'])
-#    newDF4 = pd.DataFrame(res6.index, columns=['heure_achat_n1'])
-#    newDF5 = pd.DataFrame(res6.index, columns=['jour_dernier_achat'])
-#    newDF6 = pd.DataFrame(res6.index, columns=['heure_dernier_achat'])
-#
-#    # Pour tous les index, on recherche les données
-#    for ligne in res6.index:
-#        # Récupération de toutes les dates d'achats
-#        dates = pd.Series(data['InvoiceDate'][data['CustomerID'] == float(ligne)].unique())
-#
-#        # Initialisation de la variable "somme" au bon type
-#        somme = datetime.timedelta(0)
-#        res = []
-#
-#        # Pour toutes les dates, on calcule la différence entre 2 dates
-#        for i, p in enumerate(dates):
-#            # Pour calculer l'heure moyenne d'achat
-#            res.append(dates[i].hour*60 + dates[i].minute)
-#
-#            # Pour calculer le nombre de jours entre deux achats
-#            if i != 0:
-#                somme = somme + (dates[i] - dates[i-1])
-#
-#        # On fait la moyenne à la fin
-#        moyenne = somme / len(dates)
-#
-#        # Formatage des heures et minutes pour l'heure moyenne d'achat
-#        var_heures = int((sum(res)/len(res))/60)
-#        var_minutes = int(sum(res)/len(res) - var_heures*60)
-#
-#        # Et on rajoute ça dans le dataframe créé pour ça
-#        newDF1.loc[str(ligne)] = moyenne.days
-#        newDF2.loc[str(ligne)] = datetime.time(var_heures, var_minutes)
-#        newDF3.loc[str(ligne)] = dates[0].date()
-#        newDF4.loc[str(ligne)] = datetime.time(dates[0].hour, dates[0].minute)
-#        newDF5.loc[str(ligne)] = dates[len(dates)-1].date()
-#        newDF6.loc[str(ligne)] = datetime.time(dates[len(dates)-1].hour, dates[len(dates)-1].minute)
-#
-#    # Insertion dans le dataframe qui existait auparavant
-#    res6 = res6.join(newDF1, how='right')
-#    res6 = res6.join(newDF2, how='right')
-#    res6 = res6.join(newDF3, how='right')
-#    res6 = res6.join(newDF4, how='right')
-#    res6 = res6.join(newDF5, how='right')
-#    res6 = res6.join(newDF6, how='right')
-#
-#    return res6
