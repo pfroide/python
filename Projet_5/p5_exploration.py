@@ -9,7 +9,7 @@ Created on Mon Apr 16 19:21:40 2018
 import datetime
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, cm as cm
 from sklearn.cluster import KMeans
 from sklearn import metrics
 from sklearn import preprocessing
@@ -21,6 +21,32 @@ from sklearn.preprocessing import MinMaxScaler
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p5\\'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_5\\images'
+
+def correlation_matrix(data):
+    """
+        Fonction qui permet de créer une visualisation du lien entre les
+        variables 2 à 2
+    """
+
+    # Calcule de la matrice
+    corr = data.corr()
+    cmap = cm.get_cmap('jet', 30)
+
+    # Taille de la figure
+    plt.figure(figsize=(15, 15))
+    # Création du type d'image
+    cax = plt.imshow(data.corr(), interpolation="nearest", cmap=cmap)
+    plt.grid(True)
+
+    # Libellés sur les axes
+    plt.xticks(range(len(corr.columns)), corr.columns, rotation=90, fontsize=10)
+    plt.yticks(range(len(corr.columns)), corr.columns, fontsize=10)
+
+    # Add colorbar, make sure to specify tick locations to match desired ticklabels
+    plt.colorbar(cax, ticks=[-0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])
+    plt.tight_layout()
+    plt.savefig(_DOSSIERTRAVAIL + '\\matrix', dpi=100)
+    plt.show()
 
 def dbscan(data_x, nb_samples):
     """
@@ -260,12 +286,6 @@ def calcul_sommes(data, df_num):
 def calcul_dates(data, df_num):
     """
     Fonction qui va gérer toutes les informations retirées graçe aux dates
-        * nb_jour_2_achats
-        * moyenne_horaire
-        * jour_achat_n1
-        * heure_achat_n1
-        * jour_dernier_achat
-        * heure_dernier_achat
     """
 
     # Colonnes que l'on va créer dans le dataframe vide
@@ -276,7 +296,8 @@ def calcul_dates(data, df_num):
                 'jour_dernier_achat',
                 'heure_dernier_achat',
                 'ecart_min_2_achats',
-                'ecart_max_2_achats'
+                'ecart_max_2_achats',
+                'day_of_week'
                ]
 
     # Création d'un dataframe vide
@@ -310,10 +331,16 @@ def calcul_dates(data, df_num):
 
         # Vérification qu'il y a eu plus qu'un achat, sinon on enlève la valeur initiale
         if ecart_min == datetime.timedelta(500):
-            ecart_min = datetime.timedelta(0)
+            ecart_min = datetime.timedelta(365)
+
+        if ecart_max == datetime.timedelta(0):
+            ecart_max = datetime.timedelta(365)
 
         # On fait la moyenne à la fin
-        moyenne = somme / len(dates)
+        if len(dates) > 1:
+            moyenne = somme / len(dates)
+        else:
+            moyenne = datetime.timedelta(365)
 
         # Formatage des heures et minutes pour l'heure moyenne d'achat
         var_heures = int((sum(res)/len(res))/60)
@@ -331,20 +358,17 @@ def calcul_dates(data, df_num):
                                                               dates[len(dates)-1].minute)
         datatemp.loc[str(ligne), colonnes[6]] = ecart_min.days
         datatemp.loc[str(ligne), colonnes[7]] = ecart_max.days
+        datatemp.loc[str(ligne), colonnes[8]] = round(dates.dt.weekday.mean())
 
     # Insertion dans le dataframe qui existait auparavant
     df_num = df_num.join(datatemp, how='right')
 
     return df_num
 
-def main():
+def donnees_manquantes(data):
     """
-    Fonction principale
+    Données manquantes
     """
-
-    # Récupération du dataset
-    fichier = 'Online Retail.xlsx'
-    data = pd.read_excel(_DOSSIER + fichier, error_bad_lines=False)
 
     # Données manquantes
     fichier_save = _DOSSIERTRAVAIL + '\\' + 'missing_data.csv'
@@ -360,7 +384,20 @@ def main():
     print(data_transpose)
     data_transpose.to_csv(fichier_save)
 
+def main():
+    """
+    Fonction principale
+    """
+
+    # Récupération du dataset
+    fichier = 'Online Retail.xlsx'
+    data = pd.read_excel(_DOSSIER + fichier, error_bad_lines=False)
+
+    # Données manquantes
+    donnees_manquantes(data)
+
     data = data[data['StockCode'] != "AMAZONFEE"]
+    # voir le nombre moyen d'annulation par année
     data = data[data['Quantity'] > 0]
     data = data[pd.notnull(data['CustomerID'])]
 
@@ -404,6 +441,11 @@ def main():
     # Appel de la fonction qui gérer les différentes factures
     df_num = calcul_sommes(data, df_num)
 
+    # Formatage en float
+    df_num['valeur_facture_1'] = df_num['valeur_facture_1'].astype(float)
+    df_num['valeur_facture_2'] = df_num['valeur_facture_2'].astype(float)
+    df_num['valeur_last_facture'] = df_num['valeur_last_facture'].astype(float)
+
     # Formatage en intervalle des dates
     nom_colonne = ['jour_achat_n1', 'jour_dernier_achat']
 
@@ -429,18 +471,39 @@ def main():
     data[data['CustomerID'] == 12347]
     data['InvoiceNo'][data['CustomerID'] == 12347].count()
 
-    # One-Hot encoding
+    # Label encoding
     liste_criteres = ['interval_moyenne_horaire',
                       'interval_jour_achat_n1',
                       'interval_heure_achat_n1',
                       'interval_jour_dernier_achat',
                       'interval_heure_dernier_achat'
                      ]
-    df_num = pd.get_dummies(data=df_num, columns=liste_criteres)
+
+    le = preprocessing.LabelEncoder()
+
+    for critere in liste_criteres:
+        le.fit(df_num[critere])
+        df_num[critere] = le.transform(df_num[critere])
+
+    # Affichage de la matrice de corrélation
+    correlation_matrix(df_num)
+
+    # déviation standard au lieu des n factures
+    # analyse univariée, bivariée
+
+    # A priori ces colonnes sont inutiles, mais je ne les supprime pas avant
+    del df_num['interval_heure_dernier_achat']
+    del df_num['interval_jour_dernier_achat']
+    del df_num['valeur_facture_2']
+    del df_num['valeur_last_facture']
 
     # Méthode du KMeans (coude)
     df_num.fillna(0, inplace=True)
-    res, dico = affichage_kmeans(df_num, 3, 40, 1)
+    res, dico = affichage_kmeans(df_num, 20, 20, 1)
+
+    # Verification
+    df_verif = df_num.groupby('labels').mean()
+    df_verif['Count'] = df_num.groupby('labels').somme_total.count()
 
     # Répartition des labels
     histogramme(df_num, 'labels')
@@ -448,6 +511,22 @@ def main():
     # Tester dbscan
     for i in range(1, 25):
         liste = dbscan(df_num, i)
+
+    # Suppression des petits labels. A améliorer
+    df_verif = df_verif[df_verif['Count'] > 100]
+
+    listing = []
+    for i in range(0, 20):
+        listing.append(i)
+
+    for i in df_verif.index:
+        listing.remove(i)
+
+    for i in listing:
+        df_num = df_num[(df_num['labels'] != i)]
+
+    # Export
+    df_num.to_csv('C:\\Users\\Toni\\Desktop\\dataset_p5.csv')
 
 #    res7 = df_num.groupby('labels').size().reset_index(name='nb')
 #    res7 = df_num.groupby(['labels', 'nb_factures']).size().reset_index(name='nb')
