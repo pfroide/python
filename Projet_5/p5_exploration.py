@@ -16,7 +16,6 @@ from sklearn import preprocessing
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import MinMaxScaler
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p5\\'
@@ -281,6 +280,11 @@ def calcul_sommes(data, df_num):
     # Insertion dans le dataframe qui existait auparavant
     df_num = df_num.join(datatemp, how='right')
 
+    # Formatage en float
+    df_num['valeur_facture_1'] = df_num['valeur_facture_1'].astype(float)
+    df_num['valeur_facture_2'] = df_num['valeur_facture_2'].astype(float)
+    df_num['valeur_last_facture'] = df_num['valeur_last_facture'].astype(float)
+
     return df_num
 
 def calcul_dates(data, df_num):
@@ -363,6 +367,11 @@ def calcul_dates(data, df_num):
     # Insertion dans le dataframe qui existait auparavant
     df_num = df_num.join(datatemp, how='right')
 
+    # Formatage en int
+    df_num['ecart_moy_2_achats'] = df_num['ecart_moy_2_achats'].astype(int)
+    df_num['ecart_min_2_achats'] = df_num['ecart_min_2_achats'].astype(int)
+    df_num['ecart_max_2_achats'] = df_num['ecart_max_2_achats'].astype(int)
+
     return df_num
 
 def donnees_manquantes(data):
@@ -383,6 +392,25 @@ def donnees_manquantes(data):
     data_transpose = data.describe().reset_index().transpose()
     print(data_transpose)
     data_transpose.to_csv(fichier_save)
+
+def suppression_labels(df_verif, df_num):
+    """
+    # Suppression des petits labels. A améliorer
+    """
+
+    # Limite à retravailler
+    df_verif = df_verif[df_verif['Count'] > 100]
+
+    # Création de la liste qui va garder les labels à supprimer
+    listing = list(range(0, 21))
+
+    for i in df_verif.index:
+        listing.remove(i)
+
+    for i in listing:
+        df_num = df_num[(df_num['labels'] != i)]
+
+    return df_num
 
 def main():
     """
@@ -421,30 +449,20 @@ def main():
     df_num.columns = ['1', '2', '3', '4']
     df_num = df_num.rename(index=str, columns={"1": "somme_total",
                                                "2": "nb_article_total",
-                                               "3": "nb_categorie_article_total",
+                                               "3": "nb_categorie_total",
                                                "4": "nb_factures"})
 
     # Calculs de moyennes
-    df_num['nb_article_moyen_par_facture'] = df_num['nb_article_total']/df_num['nb_factures']
-    df_num['somme_moyenne_par_facture'] = df_num['somme_total']/df_num['nb_factures']
-    df_num['nb_categorie_article_par_facture'] = df_num['nb_categorie_article_total']/df_num['nb_factures']
-    df_num['somme_moyenne_par_article'] = df_num['somme_total']/df_num['nb_article_total']
+    df_num['mean_nb_article_facture'] = df_num['nb_article_total']/df_num['nb_factures']
+    df_num['mean_somme_par_facture'] = df_num['somme_total']/df_num['nb_factures']
+    df_num['mean_nb_categorie_facture'] = df_num['nb_categorie_total']/df_num['nb_factures']
+    df_num['mean_somme_par_article'] = df_num['somme_total']/df_num['nb_article_total']
 
     # Appel de la fonction qui va gérer tout à partir des dates
     df_num = calcul_dates(data, df_num)
 
-    # Formatage en int
-    df_num['ecart_moy_2_achats'] = df_num['ecart_moy_2_achats'].astype(int)
-    df_num['ecart_min_2_achats'] = df_num['ecart_min_2_achats'].astype(int)
-    df_num['ecart_max_2_achats'] = df_num['ecart_max_2_achats'].astype(int)
-
     # Appel de la fonction qui gérer les différentes factures
     df_num = calcul_sommes(data, df_num)
-
-    # Formatage en float
-    df_num['valeur_facture_1'] = df_num['valeur_facture_1'].astype(float)
-    df_num['valeur_facture_2'] = df_num['valeur_facture_2'].astype(float)
-    df_num['valeur_last_facture'] = df_num['valeur_last_facture'].astype(float)
 
     # Formatage en intervalle des dates
     nom_colonne = ['jour_achat_n1', 'jour_dernier_achat']
@@ -465,6 +483,8 @@ def main():
     # Création des intervalles horaires pour les nom_colonne ci-dessus
     for i in range(0, len(nom_colonne)):
         df_num = creation_intervalles_heures(df_num, nom_colonne[i])
+
+        # Suppresion de la colonne d'origine
         del df_num[nom_colonne[i]]
 
     # Pour vérifier
@@ -479,17 +499,14 @@ def main():
                       'interval_heure_dernier_achat'
                      ]
 
-    le = preprocessing.LabelEncoder()
+    labelencode = preprocessing.LabelEncoder()
 
     for critere in liste_criteres:
-        le.fit(df_num[critere])
-        df_num[critere] = le.transform(df_num[critere])
+        labelencode.fit(df_num[critere])
+        df_num[critere] = labelencode.transform(df_num[critere])
 
     # Affichage de la matrice de corrélation
     correlation_matrix(df_num)
-
-    # déviation standard au lieu des n factures
-    # analyse univariée, bivariée
 
     # A priori ces colonnes sont inutiles, mais je ne les supprime pas avant
     del df_num['interval_heure_dernier_achat']
@@ -501,7 +518,7 @@ def main():
     df_num.fillna(0, inplace=True)
     res, dico = affichage_kmeans(df_num, 20, 20, 1)
 
-    # Verification
+    # Partie de verification pour voir les labels qui ont étés créés
     df_verif = df_num.groupby('labels').mean()
     df_verif['Count'] = df_num.groupby('labels').somme_total.count()
 
@@ -512,21 +529,14 @@ def main():
     for i in range(1, 25):
         liste = dbscan(df_num, i)
 
-    # Suppression des petits labels. A améliorer
-    df_verif = df_verif[df_verif['Count'] > 100]
-
-    listing = []
-    for i in range(0, 20):
-        listing.append(i)
-
-    for i in df_verif.index:
-        listing.remove(i)
-
-    for i in listing:
-        df_num = df_num[(df_num['labels'] != i)]
+    # Suppresion des labels de bruit
+    suppression_labels(df_verif, df_num)
 
     # Export
     df_num.to_csv('C:\\Users\\Toni\\Desktop\\dataset_p5.csv')
+
+    # déviation standard au lieu des n factures
+    # analyse univariée, bivariée
 
 #    res7 = df_num.groupby('labels').size().reset_index(name='nb')
 #    res7 = df_num.groupby(['labels', 'nb_factures']).size().reset_index(name='nb')
