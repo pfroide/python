@@ -26,7 +26,6 @@ warnings.filterwarnings("ignore")
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p5\\'
-_DOSSIERPKL = 'C:\\Users\\Toni\\python\\python\\Projet_5\\pkl'
 _DOSSIERIMAGE = 'C:\\Users\\Toni\\python\\python\\Projet_5\\images'
 _FICHIERDATA = _DOSSIER + 'dataset_p5.csv'
 _VERBOSE = 0
@@ -36,34 +35,23 @@ def appel_cvs(xtrain, ytrain):
     Fonction qui fournit les hyperparamètres aux modèles et appelle les fonctions
     """
 
-    # Choix de l'algorithme de régression : SGDRegressor et hyperparamètres
-    model = KNeighborsClassifier()
-    param_grid = {'n_neighbors': [5, 9, 13, 17, 23, 29, 37, 43, 50]}
+    # Choix de l'algorithme de classification
+    model = [KNeighborsClassifier(),
+             AdaBoostClassifier(),
+             RandomForestClassifier(),
+             LinearDiscriminantAnalysis()
+            ]
 
-    # Appel de fonction avec le SGDRegressor
-    log_cv = algos_cv(xtrain, ytrain, model, param_grid)
-
-     # Choix de l'algorithme de régression : Ridge et hyperparamètres
-    model = AdaBoostClassifier()
-    param_grid = {'n_estimators': [5, 20, 35, 50, 65]}
-
-    # Appel de fonction avec le Ridge
-    log_cv = algos_cv(xtrain, ytrain, model, param_grid)
-
-    # Choix de l'algorithme de régression RFR et hyperparamètres
-    model = RandomForestClassifier()
-    param_grid = {'max_depth': [None, 10, 20, 30],
-                  'n_estimators': [5, 20, 35, 50]}
+    # Hyperparamètres
+    param_grid = [{'n_neighbors': [5, 9, 13, 17, 23, 29, 37, 43, 50]},
+                  {'n_estimators': [5, 20, 35, 50, 65]},
+                  {'max_depth': [None, 10, 20, 30], 'n_estimators': [5, 20, 35, 50]},
+                  {'n_components': [2, 3, 4, 5, 10, 15, 30]}
+                 ]
 
     # Appel de fonction avec le RandomForestRegressor
-    log_cv = algos_cv(xtrain, ytrain, model, param_grid)
-
-    # Choix de l'algorithme de régression Lasso et hyperparamètres
-    model = LinearDiscriminantAnalysis()
-    param_grid = {'n_components': [2, 3, 4, 5, 10, 15, 30]}
-
-    # Appel de fonction avec le RandomForestRegressor
-    log_cv = algos_cv(xtrain, ytrain, model, param_grid)
+    for i in range(0, len(model)):
+        log_cv = algos_cv(xtrain, ytrain, model[i], param_grid[i])
 
 def algos_cv(xtrain, ytrain, model, param_grid):
     """
@@ -229,8 +217,11 @@ def main():
     Fonction principale
     """
 
-    #
+    # Lecture du dataset
     data = pd.read_csv(_FICHIERDATA, error_bad_lines=False)
+
+    # Récupération de l'index
+    data = data.set_index('Unnamed: 0')
 
     # Axe X
     data_x = data.copy()
@@ -238,7 +229,7 @@ def main():
     # On supprime les étiquettes de l'axe X
     del data_x['labels']
 
-    # Axe Y
+    # Axe Y = étiquettes
     data_y = data['labels']
 
     # Répartition Train/Test
