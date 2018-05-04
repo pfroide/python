@@ -7,8 +7,10 @@ Created on Tue Apr 24 19:57:19 2018
 
 # On importe les librairies dont on aura besoin pour ce tp
 import warnings
+import numpy as np
 import pandas as pd
 import seaborn as sns
+import itertools
 
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score, log_loss
@@ -20,6 +22,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.metrics import confusion_matrix
 
 # Pour ne pas avoir les warnings lors de la compilation
 warnings.filterwarnings("ignore")
@@ -30,7 +33,41 @@ _DOSSIERIMAGE = 'C:\\Users\\Toni\\python\\python\\Projet_5\\images'
 _FICHIERDATA = _DOSSIER + 'dataset_p5.csv'
 _VERBOSE = 0
 
-def appel_cvs(xtrain, ytrain):
+def plot_confusion_matrix(cm, classes, title, biais):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+
+    # Taille de la figure
+    np.set_printoptions(precision=2)
+    plt.figure(figsize=(7, 7))
+
+    # Jeu de couleur
+    cmap = plt.cm.Greens
+
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    title = "Matrix_" + biais + "_"  + title
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes)
+    plt.yticks(tick_marks, classes)
+
+    fmt = 'd'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.tight_layout()
+    plt.savefig(_DOSSIERIMAGE + "\\" + title)
+    plt.show()
+
+def appel_cvs(xtrain, xtest, ytrain, ytest, biais):
     """
     Fonction qui fournit les hyperparamètres aux modèles et appelle les fonctions
     """
@@ -51,9 +88,9 @@ def appel_cvs(xtrain, ytrain):
 
     # Appel de fonction avec le RandomForestRegressor
     for i in range(0, len(model)):
-        log_cv = algos_cv(xtrain, ytrain, model[i], param_grid[i])
+        log_cv = algos_cv(xtrain, xtest, ytrain, ytest, model[i], param_grid[i], biais)
 
-def algos_cv(xtrain, ytrain, model, param_grid):
+def algos_cv(xtrain, xtest, ytrain, ytest, model, param_grid, biais):
     """
     TBD
     """
@@ -92,11 +129,17 @@ def algos_cv(xtrain, ytrain, model, param_grid):
     print("Meilleur score : ", score_max, "pour", clf.best_params_, "\n")
 
     # Affichage du diagramme en baton
-    affichage_score(model, log_cv)
+    affichage_score(model, log_cv, biais)
+
+    ypred = clf.best_estimator_.predict(xtest)
+
+    # Affichage de la matrice de confusion
+    cnf_matrix = confusion_matrix(ytest, ypred)
+    plot_confusion_matrix(cnf_matrix, ytest.unique(), model.__class__.__name__, biais)
 
     return log_cv
 
-def affichage_score(model, log_cv):
+def affichage_score(model, log_cv, biais):
     """
     Diagrammes en batons pour voir les résultats
     """
@@ -147,10 +190,10 @@ def affichage_score(model, log_cv):
     # Esthétisme
     plt.grid()
     plt.ylabel('Accuracy')
-    titre = 'Accuracy suivant les hyperparamètres pour '
+    titre = 'Accuracy pour ' + model.__class__.__name__ + ", " + "biais = " + biais
     plt.title(titre)
     plt.tight_layout()
-    plt.savefig(_DOSSIERIMAGE + "\\Accuracy" + model.__class__.__name__)
+    plt.savefig(_DOSSIERIMAGE + "\\Accuracy_" + biais + "_"  + model.__class__.__name__)
     plt.show()
 
 def algo_wo_optimisation(xtrain, xtest, ytrain, ytest):
@@ -180,7 +223,7 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest):
         # Affichage
         print("="*30)
         print(name)
-        print('****Results****')
+        print('****Resultats****')
 
         # Scores des prédictions
         train_predictions = clf.predict(xtest)
@@ -232,11 +275,34 @@ def main():
     # Axe Y = étiquettes
     data_y = data['labels']
 
+    # Essai dans biais dans les données
     # Répartition Train/Test
-    xtrain, xtest, ytrain, ytest = train_test_split(data_x, data_y, train_size=0.75)
+    xtrain, xtest, ytrain, ytest = train_test_split(data_x, data_y, train_size=0.75, stratify=data_y)
 
     # Sans optimisations
     algo_wo_optimisation(xtrain, xtest, ytrain, ytest)
 
     # Recherche d'optimisation
-    appel_cvs(xtrain, ytrain)
+    appel_cvs(xtrain, xtest, ytrain, ytest, "aucun")
+
+    # Essai avec biais temporel
+    # Répartition Train/Test
+    xtrain = data[data['day_of_week'] != 6]
+    xtest = data[data['day_of_week'] == 6]
+    ytrain = xtrain['labels']
+    ytest = xtest['labels']
+    del xtrain['labels']
+    del xtest['labels']
+
+    # Sans optimisations
+    #algo_wo_optimisation(xtrain, xtest, ytrain, ytest)
+
+    # Recherche d'optimisation
+    appel_cvs(xtrain, xtest, ytrain, ytest, "temporel")
+
+    # Essai avec biais data_leakage
+    # Sans optimisations
+    #algo_wo_optimisation(xtrain, xtest, ytrain, ytest)
+
+    # Recherche d'optimisation
+    appel_cvs(data_x, data_x, data_y, data_y, "data_leakage")
