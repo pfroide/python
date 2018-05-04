@@ -374,13 +374,13 @@ def calcul_dates(data, df_num):
 
     return df_num
 
-def donnees_manquantes(data):
+def donnees_manquantes(data, nom):
     """
     Données manquantes
     """
 
     # Données manquantes
-    fichier_save = _DOSSIERTRAVAIL + '\\' + 'missing_data.csv'
+    fichier_save = _DOSSIERTRAVAIL + '\\' + nom + '.csv'
     missing_data = data.isnull().sum(axis=0).reset_index()
     missing_data.columns = ['column_name', 'missing_count']
     missing_data['filling_factor'] = (data.shape[0]-missing_data['missing_count'])/data.shape[0]*100
@@ -422,10 +422,9 @@ def main():
     data = pd.read_excel(_DOSSIER + fichier, error_bad_lines=False)
 
     # Données manquantes
-    donnees_manquantes(data)
+    donnees_manquantes(data, "missing_data_1")
 
     data = data[data['StockCode'] != "AMAZONFEE"]
-    # voir le nombre moyen d'annulation par année
     data = data[data['Quantity'] > 0]
     data = data[pd.notnull(data['CustomerID'])]
 
@@ -526,64 +525,14 @@ def main():
     histogramme(df_num, 'labels')
 
     # Tester dbscan
-    for i in range(1, 25):
+    for i in range(1, 5):
         liste = dbscan(df_num, i)
 
     # Suppresion des labels de bruit
     suppression_labels(df_verif, df_num)
 
+    # Analyses univarivées et bivariées du nouveau dataset
+    donnees_manquantes(df_num, "missing_data_2")
+
     # Export
     df_num.to_csv('C:\\Users\\Toni\\Desktop\\dataset_p5.csv')
-
-    # déviation standard au lieu des n factures
-    # analyse univariée, bivariée
-
-#    res7 = df_num.groupby('labels').size().reset_index(name='nb')
-#    res7 = df_num.groupby(['labels', 'nb_factures']).size().reset_index(name='nb')
-
-#    table = pd.pivot_table(res8,
-#                           values=["nb_factures", "nb_article_total", "somme_total"],
-#                           index="CustomerID")
-
-#    # Number of transactions with anonymous customers
-#    print(data[data['CustomerID'].isnull()]['InvoiceNo'].unique())
-
-#    # Total number of transactions
-#    len(data['InvoiceNo'].unique())
-#
-#    # Number of transactions with anonymous customers
-#    len(data[data['CustomerID'].isnull()]['InvoiceNo'].unique())
-#
-#    # Total numbers of customers - +1 for null users
-#    len(data['CustomerID'].unique())
-#
-#    # Get top ranked ranked customers based on the total amount
-#    customers_amounts = data.groupby('CustomerID')['TotalAmount'].agg(np.sum).sort_values(ascending=False)
-#    customers_amounts.head(20)
-#
-#    customers_amounts.head(20).plot.bar()
-#
-#    # Explore by month
-#    gp_month = data.sort_values('InvoiceDate').groupby(['InvoiceYear', 'InvoiceMonth'])
-#
-#    # Month number of invoices
-#    gp_month_invoices = gp_month['InvoiceNo'].unique().agg(np.size)
-#    gp_month_invoices
-#    gp_month_invoices.plot.bar()
-#
-#    res = data.groupby(['CustomerID', 'InvoiceNo']).size().reset_index(name='nb_item_par_facture')
-#    res2 = res.groupby(['CustomerID']).size().reset_index(name='nb_factures')
-#    del res['InvoiceNo']
-#
-#    res_df = data.groupby(['CustomerID', 'Quantity']).size().reset_index(name='nb')
-#    res3 = res_df.groupby(['CustomerID']).sum().reset_index()
-#	res_df = data.groupby(['CustomerID', 'Date']).size().reset_index(name='nb')
-#	dates = data['InvoiceDate'][data['CustomerID'] == 12347].unique().astype('datetime64[D]')
-#	dates = pd.Series(data['InvoiceDate'][data['CustomerID'] == 12347].unique())
-
-#    # Define the aggregation procedure outside of the groupby operation
-#    aggregations = {'TotalAmount':['sum', min, max, 'mean', 'mad', 'median', 'std', 'sem', 'skew'],
-#                    'Quantity':['sum', min, max, 'mean', 'mad', 'median', 'std', 'sem', 'skew'],
-#                    'InvoiceNo':'count',
-#                    #'date': lambda x: max(x) - 1
-#                   }
