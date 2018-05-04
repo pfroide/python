@@ -5,12 +5,16 @@ Created on Thu Apr 26 20:16:04 2018
 @author: Toni
 """
 
+import warnings
 import datetime
 import random as rd
 import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+
+# Pour ne pas avoir les warnings lors de la compilation
+warnings.filterwarnings("ignore")
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p5\\'
@@ -56,9 +60,9 @@ def creation_client(data):
     df_cli.loc[row_c, 'ecart_min_2_achats'] = 365
     df_cli.loc[row_c, 'ecart_max_2_achats'] = 365
 
-    # Tirage au sort de la date.
-    startdate = datetime.date(2010, 12, 1)
-    date = startdate + datetime.timedelta(rd.randint(1, 365))
+#    # Tirage au sort de la date.
+#    startdate = datetime.date(2010, 12, 1)
+#    date = startdate + datetime.timedelta(rd.randint(1, 365))
 
     # Affichage de confirmation
     for i in df_cli:
@@ -93,4 +97,4 @@ def main():
     rfc = RandomForestClassifier().fit(xtrain, ytrain)
 
     # Déduction du label et affichage
-    print(rfc.predict(creation_client(data))[0])
+    print("\nClasse du client :", rfc.predict(creation_client(data))[0])
