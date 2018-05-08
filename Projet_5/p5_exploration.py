@@ -139,19 +139,22 @@ def affichage_kmeans(datanum, vmin, vmax, step):
 
     return listing, clusters_df
 
-def histogramme(data, colon):
+def histogramme_qt(data, colon, qt):
     """
     Affichage d'histogrammes
     """
 
-    fichier_save = _DOSSIERTRAVAIL + '\\' + 'histogram_' + colon
+    fichier_save = _DOSSIERTRAVAIL + '\\' + 'histogram_' + str(qt) + '_' + colon + '.png'
+
+    # On ne garde qu'une partie des données
+    data =  data[data[colon] <= data[colon].quantile(qt)]
 
     #steps = (max(data[colon])-min(data[colon]))/100
     #bin_values = np.arange(start=min(data[colon]), stop=max(data[colon]), step=steps)
     plt.figure(figsize=(10, 6))
     plt.xlabel('Valeurs')
     plt.ylabel('Décompte')
-    titre = 'Histogramme ' + colon
+    titre = 'Histogramme ' + str(qt) + '_' + colon
     plt.title(titre)
 
     # Affichage sans les valeurs NaN
@@ -159,6 +162,7 @@ def histogramme(data, colon):
     # Avec :
     # plt.hist(data[colon], bins=bin_values)
     plt.savefig(fichier_save, dpi=100)
+    plt.show()
 
 def creation_intervalles_days(df_num, nom_colonne, depart_point, frequence, nb_periods):
     """
@@ -398,11 +402,11 @@ def suppression_labels(df_verif, df_num):
     # Suppression des petits labels. A améliorer
     """
 
-    # Limite à retravailler
-    df_verif = df_verif[df_verif['Count'] > 100]
-
     # Création de la liste qui va garder les labels à supprimer
-    listing = list(range(0, 21))
+    listing = list(range(0, len(df_verif)))
+
+    # Limite à retravailler
+    df_verif = df_verif[df_verif['Count'] > 50]
 
     for i in df_verif.index:
         listing.remove(i)
@@ -411,6 +415,51 @@ def suppression_labels(df_verif, df_num):
         df_num = df_num[(df_num['labels'] != i)]
 
     return df_num
+
+def graphique_par_donnee(data, classifieur):
+    """
+    Fonction qui créé un graphique pour une donnée précisée dans l'appel
+    """
+
+    axe_y = 'labels'
+
+    # nom du fichier de sauvegarde
+    fichier_save = _DOSSIERTRAVAIL + '\\' + classifieur
+
+    # On range les données en faisaint la moyenne
+    dep = data[[axe_y, classifieur]].groupby(axe_y, as_index=True).mean()
+
+    # Tipe d'affichage et taille
+    axe = dep.plot(kind="bar", figsize=(len(dep)/2, 6))
+
+    # On fait les labels pour les afficher
+    labels = ["%.2f" % i for i in dep[classifieur]]
+    rects = axe.patches
+
+    for rect, label in zip(rects, labels):
+        height = rect.get_height()
+        width = rect.get_width()
+
+        # Différence entre chiffres négatifs et positifs
+        if "-" not in label:
+            axe.text(rect.get_x() + width / 2, height + 0.1, label, ha='center', va='bottom')
+        else:
+            axe.text(rect.get_x() + width / 2, height - 0.6, label, ha='center', va='bottom')
+
+    # Titres
+    axe.set_xlabel(axe_y, fontsize=10)
+    axe.set_ylabel(classifieur, fontsize=10)
+    titre = classifieur
+    axe.set_title(titre, fontsize=16)
+
+    # on supprime la légende
+    axe.legend().set_visible(False)
+
+    # Sauvegarde de la figure
+    fig = axe.get_figure()
+    plt.tight_layout()
+    fig.savefig(fichier_save, dpi=100)
+    plt.show()
 
 def main():
     """
@@ -486,10 +535,6 @@ def main():
         # Suppresion de la colonne d'origine
         del df_num[nom_colonne[i]]
 
-    # Pour vérifier
-    data[data['CustomerID'] == 12347]
-    data['InvoiceNo'][data['CustomerID'] == 12347].count()
-
     # Label encoding
     liste_criteres = ['interval_moyenne_horaire',
                       'interval_jour_achat_n1',
@@ -522,7 +567,7 @@ def main():
     df_verif['Count'] = df_num.groupby('labels').somme_total.count()
 
     # Répartition des labels
-    histogramme(df_num, 'labels')
+    histogramme_qt(df_num, 'labels', 1)
 
     # Tester dbscan
     for i in range(1, 5):
@@ -530,6 +575,15 @@ def main():
 
     # Suppresion des labels de bruit
     suppression_labels(df_verif, df_num)
+
+    for i in df_num:
+        histogramme_qt(df_num, i, 0.95)
+        histogramme_qt(df_num, i, 1)
+
+    # Affichage de graphiques
+    for colon in df_num:
+        if colon != 'labels':
+            graphique_par_donnee(df_num, colon)
 
     # Analyses univarivées et bivariées du nouveau dataset
     donnees_manquantes(df_num, "missing_data_2")
