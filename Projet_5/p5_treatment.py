@@ -76,14 +76,14 @@ def appel_cvs(xtrain, xtest, ytrain, ytest, biais):
     model = [KNeighborsClassifier(),
              AdaBoostClassifier(),
              RandomForestClassifier(),
-             LinearDiscriminantAnalysis()
+             GradientBoostingClassifier()
             ]
 
     # Hyperparamètres
     param_grid = [{'n_neighbors': [5, 9, 13, 17, 23, 29, 37, 43, 50]},
                   {'n_estimators': [5, 20, 35, 50, 65]},
                   {'max_depth': [None, 10, 20, 30], 'n_estimators': [5, 20, 35, 50]},
-                  {'n_components': [2, 3, 4, 5, 10, 15, 30]}
+                  {'max_depth': [None, 10, 20, 30], 'n_estimators': [5, 20, 35, 50]}
                  ]
 
     # Appel de fonction avec le RandomForestRegressor
@@ -135,6 +135,7 @@ def algos_cv(xtrain, xtest, ytrain, ytest, model, param_grid, biais):
 
     # Affichage de la matrice de confusion
     cnf_matrix = confusion_matrix(ytest, ypred)
+    print(cnf_matrix)
     plot_confusion_matrix(cnf_matrix, ytest.unique(), model.__class__.__name__, biais)
 
     return log_cv
@@ -203,13 +204,13 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest):
     """
 
     classifiers = [KNeighborsClassifier(3),
-                   SVC(kernel="rbf", C=0.025, probability=True),
-                   DecisionTreeClassifier(),
+                   #SVC(kernel="rbf", C=0.025, probability=True),
+                   #DecisionTreeClassifier(),
                    RandomForestClassifier(),
                    AdaBoostClassifier(),
                    GradientBoostingClassifier(),
-                   GaussianNB(),
-                   LinearDiscriminantAnalysis(),
+                   #GaussianNB(),
+                   #LinearDiscriminantAnalysis(),
                   ]
 
     # Logging for Visual Comparison
@@ -287,22 +288,16 @@ def main():
 
     # Essai avec biais temporel
     # Répartition Train/Test
-    xtrain = data[data['day_of_week'] != 6]
-    xtest = data[data['day_of_week'] == 6]
+    xtrain = data[data['day_of_week'] >= 2]
+    xtest = data[data['day_of_week'] < 2]
     ytrain = xtrain['labels']
     ytest = xtest['labels']
     del xtrain['labels']
     del xtest['labels']
 
-    # Sans optimisations
-    #algo_wo_optimisation(xtrain, xtest, ytrain, ytest)
-
     # Recherche d'optimisation
     appel_cvs(xtrain, xtest, ytrain, ytest, "temporel")
 
     # Essai avec biais data_leakage
-    # Sans optimisations
-    #algo_wo_optimisation(xtrain, xtest, ytrain, ytest)
-
     # Recherche d'optimisation
     appel_cvs(data_x, data_x, data_y, data_y, "data_leakage")
