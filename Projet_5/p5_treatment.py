@@ -7,21 +7,17 @@ Created on Tue Apr 24 19:57:19 2018
 
 # On importe les librairies dont on aura besoin pour ce tp
 import warnings
+import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import itertools
 
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score, log_loss
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import confusion_matrix
 
 # Pour ne pas avoir les warnings lors de la compilation
@@ -134,7 +130,7 @@ def algos_cv(xtrain, xtest, ytrain, ytest, model, param_grid, biais):
     ypred = clf.best_estimator_.predict(xtest)
 
     # Affichage de la matrice de confusion
-    cnf_matrix = confusion_matrix(ytest, ypred)
+    cnf_matrix = confusion_matrix(ypred, ytest, labels=ytrain.unique())
     print(cnf_matrix)
     plot_confusion_matrix(cnf_matrix, ytest.unique(), model.__class__.__name__, biais)
 
@@ -204,13 +200,9 @@ def algo_wo_optimisation(xtrain, xtest, ytrain, ytest):
     """
 
     classifiers = [KNeighborsClassifier(3),
-                   #SVC(kernel="rbf", C=0.025, probability=True),
-                   #DecisionTreeClassifier(),
                    RandomForestClassifier(),
                    AdaBoostClassifier(),
                    GradientBoostingClassifier(),
-                   #GaussianNB(),
-                   #LinearDiscriminantAnalysis(),
                   ]
 
     # Logging for Visual Comparison
@@ -286,18 +278,36 @@ def main():
     # Recherche d'optimisation
     appel_cvs(xtrain, xtest, ytrain, ytest, "aucun")
 
-    # Essai avec biais temporel
-    # Répartition Train/Test
-    xtrain = data[data['day_of_week'] >= 2]
-    xtest = data[data['day_of_week'] < 2]
+    # Baseline pour le biais
+    clf = RandomForestClassifier(max_depth=10, n_estimators=20)
+    clf.fit(xtrain, ytrain)
+    print('Accuracy :', round(clf.score(xtest, ytest)*100, 2))
+
+    # Affichage de la matrice de confusion
+    cnf_matrix = confusion_matrix(clf.predict(xtest), ytest, labels=ytrain.unique())
+    plot_confusion_matrix(cnf_matrix, ytest.unique(), 'RandomForestClassifier', 'aucun')
+
+    # Essai avec biais somme
+    xtrain = data[data['somme_total'] <= data['somme_total'].quantile(0.75)]
+    xtest = data[data['somme_total'] > data['somme_total'].quantile(0.75)]
     ytrain = xtrain['labels']
     ytest = xtest['labels']
     del xtrain['labels']
     del xtest['labels']
 
-    # Recherche d'optimisation
-    appel_cvs(xtrain, xtest, ytrain, ytest, "temporel")
+    clf = RandomForestClassifier(max_depth=10, n_estimators=20)
+    clf.fit(xtrain, ytrain)
+    print('Accuracy :', round(clf.score(xtest, ytest)*100, 2))
 
-    # Essai avec biais data_leakage
-    # Recherche d'optimisation
-    appel_cvs(data_x, data_x, data_y, data_y, "data_leakage")
+    # Affichage de la matrice de confusion
+    cnf_matrix = confusion_matrix(clf.predict(xtest), ytest, labels=ytrain.unique())
+    plot_confusion_matrix(cnf_matrix, ytest.unique(), 'RandomForestClassifier', 'aucun')
+
+    # Essai Data leakage
+    clf = RandomForestClassifier(max_depth=10, n_estimators=20)
+    clf.fit(data_x, data_y)
+    print('Accuracy :', round(clf.score(xtest, ytest)*100, 2))
+
+    # Affichage de la matrice de confusion
+    cnf_matrix = confusion_matrix(clf.predict(xtest), ytest, labels=ytrain.unique())
+    plot_confusion_matrix(cnf_matrix, ytest.unique(), 'RandomForestClassifier', 'aucun')
