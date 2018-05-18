@@ -6,25 +6,63 @@ Created on Thu May 17 21:51:03 2018
 """
 
 # On importe les librairies dont on aura besoin pour ce tp
-import datetime
+import nltk
 import numpy as np
 import pandas as pd
+#nltk.download()
 
+from nltk.stem.porter import *
 from bs4 import BeautifulSoup
-
 from matplotlib import pyplot as plt, cm as cm
-from sklearn.cluster import KMeans
-from sklearn import metrics
-from sklearn import preprocessing
-from sklearn.metrics import silhouette_score
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Lieu où se trouve le fichier
 _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p6\\'
 _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images'
 
-def suppr_code(fichier):
+def creer_matrix(text):
+    """
+    TBD
+    """
+
+    vectorizer = CountVectorizer()
+    t_vec = TfidfVectorizer()
+
+    X = vectorizer.fit_transform(text)
+    Y = t_vec.fit_transform(text)
+
+    #print(X.toarray())
+    #print(Y.toarray())
+
+    #print(vectorizer.get_feature_names())
+    #print(t_vec.get_feature_names())
+
+    return X.toarray()
+
+    #dense = Y.todense()
+    #denselist = dense.tolist()
+    #df = pd.DataFrame(denselist)
+    #s = pd.Series(df.loc[0])
+    #s[s > 0].sort_values(ascending=False)
+
+def fct_nltk(text):
+    """
+    TBD
+    """
+
+    lemma = nltk.wordnet.WordNetLemmatizer()
+
+    stop_words = set(stopwords.words('english'))
+    words = word_tokenize(text.lower())
+
+    new_sentence = [lemma.lemmatize(x) for x in words if ((not x in stop_words) and x.isalpha())]
+
+    return new_sentence
+
+def suppr_html_code(fichier):
     """
     TBD
     """
@@ -35,15 +73,6 @@ def suppr_code(fichier):
 
     for balise in liste:
         balise.decompose()
-
-    return soupe
-
-def parse_html(fichier_moche):
-    """
-    TBD
-    """
-
-    soupe = BeautifulSoup(fichier_moche, "lxml")
 
     return soupe.text
 
@@ -75,12 +104,17 @@ def main():
     fichier = 'QueryResults.csv'
     data = pd.read_csv(_DOSSIER + fichier, error_bad_lines=False)
 
+    #
     data = data[0:500]
+
+    #
+    new_df = pd.DataFrame()
+    matrix_num = pd.DataFrame()
 
     # Données manquantes
     donnees_manquantes(data, "missing_data_1")
 
-    #for ligne in range(0, len(data)):
-    #    data.loc[ligne, 'Body'] = parse_html(data.loc[ligne, 'Body'])
-    data['Body'] = [parse_html(x) for x in data['Body']]
-    data['Body'] = [suppr_code(x) for x in data['Body']]
+    #
+    data['Body'] = [suppr_html_code(x) for x in data['Body']]
+    new_df['Sentences'] = [fct_nltk(x) for x in data['Body']]
+    matrix_num['numbers'] = [creer_matrix(x) for x in new_df['Sentences']]
