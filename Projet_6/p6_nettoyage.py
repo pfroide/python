@@ -6,6 +6,7 @@ Created on Thu May 17 21:51:03 2018
 """
 
 # On importe les librairies dont on aura besoin pour ce tp
+import sys
 import nltk
 import numpy as np
 import pandas as pd
@@ -19,13 +20,21 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.decomposition import NMF
+from sklearn.decomposition import TruncatedSVD
 from matplotlib import pyplot as plt, cm as cm
+from wordcloud import WordCloud
 from yellowbrick.text import FreqDistVisualizer
-#from wordcloud import WordCloud
 
 # Lieu où se trouve le fichier
-_DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p6\\'
-_DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images'
+if sys.platform == "windows":
+    _FICHIER = 'QueryResults.csv'
+    _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p6\\'
+    _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images'
+
+elif sys.platform == "linux":
+    _FICHIER = 'stackoverflow_train_dataset.csv'
+    _DOSSIER = '/home/toni/Bureau/'
+    _DOSSIERTRAVAIL = '/home/toni/Bureau/images/'
 
 def creer_tfidfvectorizer(text):
     """
@@ -132,53 +141,66 @@ def display_topics(model, feature_names, no_top_words):
     TBD
     """
 
+    #
     for topic_idx, topic in enumerate(model.components_):
-        print("Topic", topic_idx)
-        print(" ".join([feature_names[i] for i in topic.argsort()[:-no_top_words - 1:-1]]))
+        print("\nTopic", topic_idx)
+        listing = []
 
-def reduction_dimension(data):
+        #
+        for i in topic.argsort()[:-no_top_words - 1:-1]:
+            listing.append(feature_names[i])
+
+        #
+        print(listing)
+
+        #
+        generate_wordcloud(listing)
+
+def reduction_dimension(data, data_range):
     """
     TBD
     """
 
-    from sklearn.decomposition import TruncatedSVD
-
-    for i in [500, 1500, 2500, 3000]:
+    #
+    for i in data_range:
         svd = TruncatedSVD(n_components=i,
-                           n_iter=7,
-                           random_state=42)
+                           n_iter=5)
 
         svd.fit(data)
 
         #print(svd.explained_variance_ratio_)
-        print(i)
-        print(round(100*svd.explained_variance_ratio_.sum(), 2))
         #print(svd.singular_values_)
+        print("Pour", i, "composants :", round(100*svd.explained_variance_ratio_.sum(), 2),"%")
 
-#def generate_wordcloud(data):
-#    """
-#    Simple WordCloud
-#    """
-#
-#    wordcloud = WordCloud(background_color='black',
-#                          #stopwords=stopwords,
-#                          max_words=20,
-#                          max_font_size=20,
-#                          relative_scaling=1,
-#                          min_font_size=1,
-#                          scale=3,
-#                          random_state=1 # chosen at random by flipping a coin; it was heads
-#                         ).generate(str(data))
-#
-#    fig = plt.figure(1, figsize=(12, 12))
-#    plt.axis('off')
-#
-#    #if title:
-#    #    fig.suptitle(title, fontsize=20)
-#    #    fig.subplots_adjust(top=2.3)
-#
-#    plt.imshow(wordcloud)
-#    plt.show()
+    # On garde la dernière valeur de i dans le fit du dessus ?
+    data_reduit = svd.fit(data).transform(data)
+
+    return data_reduit
+
+def generate_wordcloud(data):
+    """
+    Simple WordCloud
+    """
+
+    wordcloud = WordCloud(background_color='black',
+                          #stopwords=stopwords,
+                          max_words=20,
+                          max_font_size=20,
+                          relative_scaling=1,
+                          min_font_size=1,
+                          scale=3,
+                          random_state=1
+                         ).generate(str(data))
+
+    fig = plt.figure(1, figsize=(6, 6))
+    plt.axis('off')
+
+    #if title:
+    #    fig.suptitle(title, fontsize=20)
+    #    fig.subplots_adjust(top=2.3)
+
+    plt.imshow(wordcloud)
+    plt.show()
 
 def comptage(data):
     """
@@ -204,11 +226,10 @@ def main():
     """
 
     # Récupération du dataset
-    fichier = 'QueryResults.csv'
-    data = pd.read_csv(_DOSSIER + fichier, error_bad_lines=False)
+    data = pd.read_csv(_DOSSIER + _FICHIER, error_bad_lines=False)
 
     #
-    data = data[0:10000]
+    #data = data[0:3000]
 
     # Nouveau dataframe qui prendra les résultats en entrée
     new_df = pd.DataFrame()
@@ -223,7 +244,7 @@ def main():
     cpt = comptage(data['Body'])
 
     # Liste des stop words anglais
-    least_used = set([word for word in cpt if cpt[word] < 5])
+    least_used = set([word for word in cpt if cpt[word] < 10])
 
     stop_words = set(stopwords.words('english')) \
                 | set([word for word, freq, in cpt.most_common(100)]) \
@@ -237,6 +258,7 @@ def main():
     detokenizer = MosesDetokenizer()
     new_df['Sentences'] = [detokenizer.detokenize(x, return_str=True) for x in new_df['Sentences']]
 
+    ### ESSAI AVEC COUNTVECTORIZER
     # Création de la matrice finale
     matrixnum_count, names_count = creer_countvectorizer(new_df['Sentences'])
     # Conversion de la matrice finale en dataframe pour facilité d'usage
@@ -249,17 +271,13 @@ def main():
                                     learning_offset=50,
                                     random_state=0)
 
-    #
+    # Fit du LDA crée au-dessus
     lda.fit(matrixnum_count)
 
-    #
-    display_topics(lda, names_count, 10)
+    # Visualisation de la liste des mots, plus nuage de mots
+    display_topics(lda, names_count, 20)
 
-    #
-    #generate_wordcloud(matrixnum_count)
-    #| set([word for word, freq, in count.most_common(100)])
-
-    # Test de visualisation
+    # Visualisation de la fréquence d'occurence
     visualizer = FreqDistVisualizer(features=names_count,
                                     n=25,
                                     orient='v',
@@ -267,6 +285,10 @@ def main():
     visualizer.fit(matrixnum_count)
     visualizer.poof()
 
+    # Tentative de réduction de la dimension
+    matrixnum_count = reduction_dimension(matrixnum_count, [1000, 2000, 3000])
+
+    ### ESSAI AVEC TFIDFVECTORIZER
     # Création de la matrice finale
     matrixnum_tfidf, names_tfidf = creer_tfidfvectorizer(new_df['Sentences'])
     # Conversion de la matrice finale en dataframe pour facilité d'usage
@@ -279,16 +301,19 @@ def main():
               l1_ratio=.5,
               init='nndsvd')
 
-    #
+    # Fit du NMF créé au-dessus
     nmf.fit(matrixnum_tfidf)
 
-    #
+    # Visualisation de la liste des mots, plus nuage de mots
     display_topics(nmf, names_tfidf, 10)
 
-    # Test de visualisation
+    # Visualisation de la fréquence d'occurence
     visualizer = FreqDistVisualizer(features=names_tfidf,
                                     n=25,
                                     orient='v',
                                     color='g')
     visualizer.fit(matrixnum_tfidf)
     visualizer.poof()
+
+    # Tentative de réduction de la dimension
+    matrixnum_tfidf = reduction_dimension(matrixnum_tfidf, [1000, 2000, 3000])
