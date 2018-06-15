@@ -7,6 +7,7 @@ Created on Thu May 17 21:51:03 2018
 
 # On importe les librairies dont on aura besoin pour ce tp
 import sys
+import numpy as np
 import collections
 import pandas as pd
 
@@ -59,7 +60,7 @@ def creer_tfidfvectorizer(text):
     """
 
     # Création de l'objet
-    t_vectorizer = TfidfVectorizer(min_df = 0.01)
+    t_vectorizer = TfidfVectorizer(min_df=0.01)
 
     # Fit du texte d'entrée, et mis au format tableau
     liste_mots = t_vectorizer.fit_transform(text).toarray()
@@ -145,6 +146,8 @@ def display_topics(model, feature_names, no_top_words, vectype):
         # Appel de la fonction pour générer le nuage de mot
         generate_wordcloud(listing, idx, vectype)
 
+    return listing
+
 def reduction_dimension(data, limit, vectype):
     """
     Fonction de réduction de dimension
@@ -226,23 +229,24 @@ def main():
     # Récupération du dataset
     data = pd.read_csv(_DOSSIER + _FICHIER, error_bad_lines=False)
 
-    #
-    data = data[0:35000]
-
     # Fusion du body et du title
     data['Body'] = data['Title'] + data['Body']
+
+    #
+    data_train = data[0:35000]
+    data_test = data[35000:]
 
     # Nouveau dataframe qui prendra les résultats en entrée
     new_df = pd.DataFrame()
 
     # Données manquantes
-    donnees_manquantes(data, "missing_data_1")
+    donnees_manquantes(data_train, "missing_data_1")
 
     # Suppression des balises html et des parties de code
-    data['Body'] = [suppr_html_code(x) for x in data['Body']]
+    data_train['Body'] = [suppr_html_code(x) for x in data_train['Body']]
 
     # Comptage du nombre d'occurence
-    cpt = comptage(data['Body'])
+    cpt = comptage(data_train['Body'])
 
     # Liste des stop words anglais
     least_used = set([word for word in cpt if cpt[word] < 10])
@@ -253,7 +257,7 @@ def main():
 
     # Suppression des pluriels et des stop words
     # Rétrecissment du dataset
-    new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data['Body']]
+    new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data_train['Body']]
 
     # On est obligé de detokenizer pour créer la matrice finale
     detokenizer = MosesDetokenizer()
@@ -276,12 +280,12 @@ def main():
     lda.fit(matrixnum_count)
 
     # Visualisation de la liste des mots, plus nuage de mots
-    display_topics(lda, names_count, 20, 'lda')
+    test = display_topics(lda, names_count, 10, 'lda')
 
     # Visualisation de la fréquence d'occurence
     visualizer = FreqDistVisualizer(features=names_count,
                                     n=25,
-                                    orient='v',
+                                    orient='h',
                                     color='g')
     visualizer.fit(matrixnum_count)
     visualizer.poof()
@@ -308,6 +312,47 @@ def main():
     # Visualisation de la liste des mots, plus nuage de mots
     display_topics(nmf, names_tfidf, 20, 'nmf')
 
+    # Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
+    # puis multiplication des deux matrices
+
+    # Probabilité d'appartanence d'une message à un topic
+    df_tp1 = nmf.transform(matrixnum_tfidf)
+
+    # Probabilité d'appartanence d'un mot à un topic
+    df_tp3 = nmf.components_ #/ nmf.components_.sum(axis=1)[:, np.newaxis]
+
+    # Multiplication des deux matrices pour obtenir la proba documents/mots
+    df_tags = df_tp1.dot(df_tp3)
+
+    # Transformation en dataframe
+    df_tags_ = pd.DataFrame(df_tags)
+    df_tags_.columns = names_tfidf
+    df_trans = df_tags_.T
+
+    # Création de la matrice pour afficher les mots les plus fréquents par document
+    df_plus_frequent = pd.DataFrame()
+
+    for i in range(0, len(df_trans)):
+        temp = df_trans[i].nlargest(5)
+        temp = temp.reset_index()
+        df_plus_frequent[i] = temp['index']
+
+    df_plus_frequent = df_plus_frequent.T
+
+    # Création de la liste des tags d'origines, uniques
+    liste_tags = []
+
+    for i in range(0, len(data_train)):
+        words = word_tokenize(data_train.loc[i, 'Tags'])
+        for j in words:
+            if j.isalpha() and (j not in liste_tags):
+                liste_tags.append(j)
+
+    df_decompte = pd.DataFrame(columns=liste_tags)
+
+    for i in liste_tags:
+        df_decompte.loc[0, i] = data_train['Tags'].str.contains(i).sum()
+
     # Visualisation de la fréquence d'occurence
     ## voir la fréquence minimale
     visualizer = FreqDistVisualizer(features=names_tfidf,
@@ -319,3 +364,8 @@ def main():
 
     # Tentative de réduction de la dimension
     matrixnum_tfidf_num = reduction_dimension(matrixnum_tfidf, 500, 'nmf')
+
+    # Supervisé
+    # one hot encoding sur un set de tag assez fréquent
+    # one versus rest classifier
+    # sklearn multi label
