@@ -146,8 +146,6 @@ def display_topics(model, feature_names, no_top_words, vectype):
         # Appel de la fonction pour générer le nuage de mot
         generate_wordcloud(listing, idx, vectype)
 
-    return listing
-
 def reduction_dimension(data, limit, vectype):
     """
     Fonction de réduction de dimension
@@ -221,47 +219,10 @@ def comptage(data):
 
     return count
 
-def main():
+def countV():
     """
-    Fonction principale
+    TBD
     """
-
-    # Récupération du dataset
-    data = pd.read_csv(_DOSSIER + _FICHIER, error_bad_lines=False)
-
-    # Fusion du body et du title
-    data['Body'] = data['Title'] + data['Body']
-
-    #
-    data_train = data[0:35000]
-    data_test = data[35000:]
-
-    # Nouveau dataframe qui prendra les résultats en entrée
-    new_df = pd.DataFrame()
-
-    # Données manquantes
-    donnees_manquantes(data_train, "missing_data_1")
-
-    # Suppression des balises html et des parties de code
-    data_train['Body'] = [suppr_html_code(x) for x in data_train['Body']]
-
-    # Comptage du nombre d'occurence
-    cpt = comptage(data_train['Body'])
-
-    # Liste des stop words anglais
-    least_used = set([word for word in cpt if cpt[word] < 10])
-
-    stop_words = set(stopwords.words('english')) \
-                | set([word for word, freq, in cpt.most_common(100)]) \
-                | least_used
-
-    # Suppression des pluriels et des stop words
-    # Rétrecissment du dataset
-    new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data_train['Body']]
-
-    # On est obligé de detokenizer pour créer la matrice finale
-    detokenizer = MosesDetokenizer()
-    new_df['Sentences'] = [detokenizer.detokenize(x, return_str=True) for x in new_df['Sentences']]
 
     ### ESSAI AVEC COUNTVECTORIZER
     # Création de la matrice finale
@@ -293,33 +254,92 @@ def main():
     # Tentative de réduction de la dimension
     matrixnum_count_num = reduction_dimension(matrixnum_count, 2000, 'lda')
 
+def main():
+    """
+    Fonction principale
+    """
+
+    # Récupération du dataset
+    data = pd.read_csv(_DOSSIER + _FICHIER, error_bad_lines=False)
+
+    # Fusion du body et du title
+    data['Body'] = data['Title'] + data['Body']
+    data['Tags'] = data['Tags'].str.replace("<", "")
+    data['Tags'] = data['Tags'].str.replace(">", " ")
+
+    #
+    data_train = data[0:35000]
+    data_test = data[35000:]
+
+    # Nouveau dataframe qui prendra les résultats en entrée
+    new_df = pd.DataFrame()
+
+    # Données manquantes
+    donnees_manquantes(data_train, "missing_data_1")
+
+    # Suppression des balises html et des parties de code
+    data_train['Body'] = [suppr_html_code(x) for x in data_train['Body']]
+
+    # Comptage du nombre d'occurence
+    cpt = comptage(data_train['Body'])
+
+    # Liste des stop words anglais
+    least_used = set([word for word in cpt if cpt[word] < 100])
+
+    stop_words = set(stopwords.words('english')) \
+                | set([word for word, freq, in cpt.most_common(100)]) \
+                | least_used
+
+    # Suppression des pluriels et des stop words
+    # Rétrecissment du dataset
+    new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data_train['Body']]
+
+    # On est obligé de detokenizer pour créer la matrice finale
+    detokenizer = MosesDetokenizer()
+    new_df['Sentences'] = [detokenizer.detokenize(x, return_str=True) for x in new_df['Sentences']]
+
     ### ESSAI AVEC TFIDFVECTORIZER
     # Création de la matrice finale
     matrixnum_tfidf, names_tfidf = creer_tfidfvectorizer(new_df['Sentences'])
     # Conversion de la matrice finale en dataframe pour facilité d'usage
     matrixnum_tfidf = pd.DataFrame(matrixnum_tfidf, columns=names_tfidf)
 
-    # Run NMF
-    nmf = NMF(n_components=20,
-              random_state=1,
-              alpha=.1,
-              l1_ratio=.5,
-              init='nndsvd')
+    # Run LDA
+    lda = LatentDirichletAllocation(n_components=20,
+                                    #max_iter=5,
+                                    #learning_method='online',
+                                    #learning_offset=50,
+                                    random_state=0)
 
-    # Fit du NMF créé au-dessus
-    nmf.fit(matrixnum_tfidf)
+    # Fit du LDA crée au-dessus
+    lda.fit(matrixnum_tfidf)
 
     # Visualisation de la liste des mots, plus nuage de mots
-    display_topics(nmf, names_tfidf, 20, 'nmf')
+    display_topics(lda, names_tfidf, 15, 'lda')
 
     # Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
     # puis multiplication des deux matrices
 
-    # Probabilité d'appartanence d'une message à un topic
-    df_tp1 = nmf.transform(matrixnum_tfidf)
+    # Création de la liste des tags d'origines, uniques
+    liste_tags = []
+    nb_tags = []
 
+    for i in range(0, len(data_train)):
+        words = word_tokenize(data_train.loc[i, 'Tags'])
+        #
+        nb_tags.append(len(words))
+
+        for j in words:
+            if j.isalpha() and (j not in liste_tags):
+                liste_tags.append(j)
+
+    # Probabilité d'appartanence d'une message à un topic
+    df_tp1 = lda.transform(matrixnum_tfidf)
+    df_tp1 = pd.DataFrame(df_tp1)
+
+    ## PARTIE 1
     # Probabilité d'appartanence d'un mot à un topic
-    df_tp3 = nmf.components_ #/ nmf.components_.sum(axis=1)[:, np.newaxis]
+    df_tp3 = lda.components_ #/ nmf.components_.sum(axis=1)[:, np.newaxis]
 
     # Multiplication des deux matrices pour obtenir la proba documents/mots
     df_tags = df_tp1.dot(df_tp3)
@@ -333,25 +353,62 @@ def main():
     df_plus_frequent = pd.DataFrame()
 
     for i in range(0, len(df_trans)):
-        temp = df_trans[i].nlargest(5)
+        temp = df_trans[i].nlargest(nb_tags[i])
         temp = temp.reset_index()
         df_plus_frequent[i] = temp['index']
 
     df_plus_frequent = df_plus_frequent.T
 
-    # Création de la liste des tags d'origines, uniques
-    liste_tags = []
-
-    for i in range(0, len(data_train)):
-        words = word_tokenize(data_train.loc[i, 'Tags'])
-        for j in words:
-            if j.isalpha() and (j not in liste_tags):
-                liste_tags.append(j)
-
     df_decompte = pd.DataFrame(columns=liste_tags)
 
     for i in liste_tags:
         df_decompte.loc[0, i] = data_train['Tags'].str.contains(i).sum()
+
+    ## PARTIE 2
+    # Probabilité d'appartanence d'un mot à un topic
+    df_tp2 = pd.DataFrame(columns=liste_tags, index=range(0, 19))
+
+    for i in liste_tags:
+        mot = ' ' + i + ' '
+        mask = data_train['Tags'].str.contains(str(mot), regex=False)
+        temp = df_tp1[mask]
+
+        for j in df_tp1.columns:
+            df_tp2.loc[j, i] = temp[j].sum()
+
+    df_tp2 = df_tp2.astype(float)
+    m = df_tp2.sum(axis=1)[:, np.newaxis]
+
+    for i in range(0, 20):
+        df_tp2.loc[i] = df_tp2.loc[i] / m[i]
+
+    # Multiplication des deux matrices pour obtenir la proba documents/mots
+    df_tags = df_tp1.dot(df_tp2)
+
+    # Transformation en dataframe
+    df_trans = df_tags.T.astype(float)
+
+    # Création de la matrice pour afficher les mots les plus fréquents par document
+    df_prevision = []
+
+    for i in range(0, len(df_tags)):
+        temp = df_trans[i].nlargest(nb_tags[i])
+        temp = temp.reset_index()
+        df_prevision.append(temp['index'])
+
+    df_prevision = pd.DataFrame(df_prevision).reset_index(drop=True)
+
+    count_tag = 0
+
+    for i in range(0, len(data_train)):
+        liste_tags = word_tokenize(data_train.loc[i, 'Tags'])
+
+        for tag in liste_tags:
+            for j in range(0, 10):
+                if tag == df_prevision.loc[i, j]:
+                    count_tag = count_tag + 1
+
+    print(round(count_tag/df_prevision.count().sum()*100, 3), '%')
 
     # Visualisation de la fréquence d'occurence
     ## voir la fréquence minimale
@@ -363,9 +420,38 @@ def main():
     visualizer.poof()
 
     # Tentative de réduction de la dimension
-    matrixnum_tfidf_num = reduction_dimension(matrixnum_tfidf, 500, 'nmf')
+    matrixnum_tfidf_num = reduction_dimension(matrixnum_tfidf, 500, 'lda')
 
     # Supervisé
     # one hot encoding sur un set de tag assez fréquent
     # one versus rest classifier
     # sklearn multi label
+
+def test():
+
+    for i in data_train['Tags']:
+        for j in word_tokenize(i):
+            for k in df_plus_frequent.index:
+                if k == j :
+                    print(i, j, k)
+
+    mask = data_train['Tags'].str.contains('python')
+
+    for i in temp:
+        print("topic", i, temp[i].sum())
+
+    df_tp4 = pd.DataFrame(columns=liste_tags, index=range(0,19))
+
+    for i in liste_tags:
+        mask = data_train['Tags'].str.contains(str(i))
+        temp = df_tp1[mask]
+        for j in df_tp1.columns:
+            df_tp4.loc[j, i] = temp[j].sum()
+
+    df_decompte = pd.DataFrame(columns=liste_tags)
+
+    for i in liste_tags:
+        df_decompte.loc[0, i] = data_train['Tags'].str.contains(i).sum()
+
+
+# prendre tous les doucments qui ont python dans un tag
