@@ -24,6 +24,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from matplotlib import pyplot as plt
 from wordcloud import WordCloud
 from yellowbrick.text import FreqDistVisualizer
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 
 # Lieu où se trouve le fichier
 if sys.platform == "windows":
@@ -277,7 +283,7 @@ def countV(new_df):
     lda.fit(matrixnum_count)
 
     # Visualisation de la liste des mots, plus nuage de mots
-    display_topics(lda, names_count, 10, 'lda')
+    display_topics(lda, names_count, 15, 'lda')
 
     # Visualisation de la fréquence d'occurence
     visualizer = FreqDistVisualizer(features=names_count,
@@ -308,7 +314,177 @@ def comptage_metric(data_train, df_prevision, value):
                 if tag == df_prevision.loc[i, j]:
                     count_tag = count_tag + 1
 
-    print(round(count_tag/df_prevision.count().sum()*100, 3), '%')
+    print(round(count_tag/df_prevision.count().sum()*100, 1), '%')
+
+def non_supervise(new_df, liste_tags, nb_tags, data_train):
+    """
+    Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
+    puis multiplication des deux matrices
+    """
+
+    ### ESSAI AVEC COUNTVECTORIZER
+    matrixnum_count, name_count, lda_count = countV(new_df)
+
+    ### ESSAI AVEC TFIDFVECTORIZER
+    matrixnum_tfidf, names_tfidf, lda_tfidf = tfidf(new_df)
+
+    # pour les deux cas
+    for matrix, names, lda in zip([matrixnum_count, matrixnum_tfidf],
+                                  [name_count, names_tfidf],
+                                  [lda_count, lda_tfidf]):
+        ## PARTIE 1
+        # Probabilité d'appartanence d'une message à un topic
+        df_tp1 = pd.DataFrame(lda.transform(matrix))
+
+        # Probabilité d'appartanence d'un mot à un topic
+        df_tp3 = lda.components_ / lda.components_.sum(axis=1)[:, np.newaxis]
+
+        # Multiplication des deux matrices pour obtenir la proba documents/mots
+        df_mots = df_tp1.dot(df_tp3)
+        df_mots.columns = names
+
+        # Transformation en dataframe
+        #df_mots = pd.DataFrame(df_mots, columns=names_tfidf)#.T
+
+        # Création de la matrice pour afficher les mots les plus fréquents par document
+        df_plus_frequent = pd.DataFrame(columns=names)
+
+        for i in range(0, len(df_mots)):
+            temp = df_mots.loc[i].nlargest(5)
+            temp = temp.reset_index()
+            df_plus_frequent[i] = temp['index']
+
+        df_plus_frequent = df_plus_frequent.T
+
+        # Comptage des bons tags prédits
+        print("Avec mots")
+        count_tag = comptage_metric(data_train, df_plus_frequent, 5)
+
+        ## PARTIE 2
+        # Probabilité d'appartanence d'une tag à un topic
+        #df_tp1 = pd.DataFrame(lda.transform(matrix))
+
+        # Probabilité d'appartanence d'un mot à un topic
+        df_tp2 = pd.DataFrame(columns=liste_tags, index=range(0, 20))
+
+        # Comptage d'occurence d'apparition des tags pour chaque topic
+        for i in liste_tags:
+            mot = ' ' + i + ' '
+            mask = data_train['Tags'].str.contains(str(mot), regex=False)
+            temp = df_tp1[mask]
+
+            for j in df_tp1.columns:
+                df_tp2.loc[j, i] = temp[j].sum()
+
+        # Convertion en float
+        df_tp2 = df_tp2.astype(float)
+
+        # Mise au même poids avec ce dénominateur
+        div = df_tp2.sum(axis=1)[:, np.newaxis]
+        for i in range(0, len(df_tp2)):
+            df_tp2.loc[i] = df_tp2.loc[i] / div[i]
+
+        # Multiplication des deux matrices pour obtenir la proba documents/mots
+        df_tags = df_tp1.dot(df_tp2)
+
+        # Transformation en dataframe
+        df_tags = df_tags.T.astype(float)
+
+        # Création de la matrice pour afficher les mots les plus fréquents par document
+        df_prevision = pd.DataFrame()
+
+        for i in range(0, len(data_train)):
+            #temp = df_tags[i].nlargest(nb_tags[i])
+            temp = df_tags[i].nlargest(5)
+            temp = temp.reset_index()
+
+            # On supprime ceux qui ne sont pas dans le body de la question
+            for k, j in enumerate(temp['index']):
+                if j not in data_train.loc[i, 'Body']:
+                    temp = temp.drop(k)
+
+            df_prevision = df_prevision.append(temp['index'])
+
+        df_prevision = pd.DataFrame(df_prevision).reset_index(drop=True)
+
+        # Comptage des bons tags prédits
+        print("Avec tags")
+        count_tag = comptage_metric(data_train, df_prevision, 5)
+
+    return matrixnum_tfidf
+
+def supervise(data_train, matrixnum_tfidf, df_dummies):
+    """
+    # one hot encoding sur un set de tag assez fréquent
+    # one versus rest classifier
+    # sklearn multi label
+    """
+
+    # Réduction de la dimension de la matrice des tags,
+    # on ne prends que les plus fréquents
+    mask = pd.Series(df_dummies.sum()>50)
+    temp = df_dummies.loc[:, mask]
+
+    # Score à améliorer
+    obj_score = 'accuracy'
+
+    # Choix de l'algorithme de classification
+    model = [RandomForestClassifier(),
+            ]
+
+    # Hyperparamètres
+    param_grid = [{'max_depth': [None, 30], 'n_estimators': [15]},
+                  {'max_depth': [None, 30], 'n_estimators': [15]}
+                 ]
+
+    # Appel de fonction avec le RandomForestRegressor
+    for i, j in zip(model, param_grid):
+
+        print(i.__class__.__name__, "\n")
+
+        clf = GridSearchCV(i,
+                           param_grid=j,
+                           verbose=0,
+                           cv=3,
+                           scoring=obj_score,
+                           refit=True,
+                           return_train_score=False)
+
+        # Entraintement de l'algorithme
+        #classif = OneVsRestClassifier(SVC(kernel='linear', probability=True))
+        classif = OneVsRestClassifier(clf)
+        classif.fit(matrixnum_tfidf, temp)
+
+        # Predictions
+        predictions=classif.predict_proba(matrixnum_tfidf)
+        score = classif.score(matrixnum_tfidf, temp)
+        print(score)
+
+        for i in range(0, 10):
+
+            # Impression de la source
+            print(data_train['Body'].loc[i][:50], "...")
+            print('Actual label :', data_train['Tags'].loc[i])
+
+            # On prends les lignes une par une
+            ligne=predictions[i].copy()
+
+            # Variable list qui va prendre les résultats des prédictions
+            predicted_label = []
+
+            predicted_label.append(temp.columns[np.argmax(ligne)])
+
+            # On en prends 3, arbitrairement
+            for j in range(0, 3):
+
+                # Pour chaque tour on supprime la valeur la plus grande
+                ligne[np.argmax(ligne)] = 0
+
+                # On s'arrête si des prédictions sont moins pertinantes
+                if max(ligne) > 0.1:
+                    predicted_label.append(temp.columns[np.argmax(ligne)])
+
+            print("Predicted label :", predicted_label, "\n")
 
 def main():
     """
@@ -324,8 +500,8 @@ def main():
     data['Tags'] = data['Tags'].str.replace(">", " ")
 
     #
-    data_train = data[0:3500]
-    data_test = data[35000:]
+    data_train = data[0:2000]
+    data_test = data[20000:30000]
 
     # Création de la liste des tags d'origines, uniques
     liste_tags = []
@@ -367,90 +543,13 @@ def main():
     detokenizer = MosesDetokenizer()
     new_df['Sentences'] = [detokenizer(x) for x in new_df['Sentences']]
 
-    ### ESSAI AVEC COUNTVECTORIZER
-    matrixnum_count, name_count, lda = countV(new_df)
-
-    ### ESSAI AVEC TFIDFVECTORIZER
-    matrixnum_tfidf, names_tfidf, lda = tfidf(new_df)
-
     ### NON-SUPERVISE
-    # Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
-    # puis multiplication des deux matrices
+    matrixnum_tfidf = non_supervise(new_df, liste_tags, nb_tags, data_train)
 
-    ## PARTIE 1
-    # Probabilité d'appartanence d'une message à un topic
-    df_tp1 = pd.DataFrame(lda.transform(matrixnum_tfidf))
-
-    # Probabilité d'appartanence d'un mot à un topic
-    df_tp3 = lda.components_ / lda.components_.sum(axis=1)[:, np.newaxis]
-
-    # Multiplication des deux matrices pour obtenir la proba documents/mots
-    df_mots = df_tp1.dot(df_tp3)
-    df_mots.columns = names_tfidf
-
-    # Transformation en dataframe
-    #df_mots = pd.DataFrame(df_mots, columns=names_tfidf)#.T
-
-    # Création de la matrice pour afficher les mots les plus fréquents par document
-    df_plus_frequent = pd.DataFrame(columns=names_tfidf)
-
-    for i in range(0, len(df_mots)):
-        temp = df_mots.loc[i].nlargest(5)
-        temp = temp.reset_index()
-        df_plus_frequent[i] = temp['index']
-
-    df_plus_frequent = df_plus_frequent.T
-
-    # Comptage des bons tags prédits
-    count_tag = comptage_metric(data_train, df_plus_frequent, 5)
-
-    ## PARTIE 2
-    # Probabilité d'appartanence d'une tag à un topic
-    df_tp1 = pd.DataFrame(lda.transform(matrixnum_tfidf))
-
-    # Probabilité d'appartanence d'un mot à un topic
-    df_tp2 = pd.DataFrame(columns=liste_tags, index=range(0, 20))
-
-    # Comptage d'occurence d'apparition des tags pour chaque topic
-    for i in liste_tags:
-        mot = ' ' + i + ' '
-        mask = data_train['Tags'].str.contains(str(mot), regex=False)
-        temp = df_tp1[mask]
-
-        for j in df_tp1.columns:
-            df_tp2.loc[j, i] = temp[j].sum()
-
-    # Convertion en float
-    df_tp2 = df_tp2.astype(float)
-
-    # Mise au même poids avec ce dénominateur
-    div = df_tp2.sum(axis=1)[:, np.newaxis]
-    for i in range(0, len(df_tp2)):
-        df_tp2.loc[i] = df_tp2.loc[i] / div[i]
-
-    # Multiplication des deux matrices pour obtenir la proba documents/mots
-    df_tags = df_tp1.dot(df_tp2)
-
-    # Transformation en dataframe
-    df_tags = df_tags.T.astype(float)
-
-    # Création de la matrice pour afficher les mots les plus fréquents par document
-    df_prevision = pd.DataFrame()
-
-    for i in range(0, len(data_train)):
-        temp = df_tags[i].nlargest(nb_tags[i])
-        temp = temp.reset_index()
-        df_prevision = df_prevision.append(temp['index'])
-
-    df_prevision = pd.DataFrame(df_prevision).reset_index(drop=True)
-
-    # Comptage des bons tags prédits
-    count_tag = comptage_metric(data_train, df_prevision, 10)
+    # One hot encoding en prenant en compte la séparation des tags
+    df_dummies = data_train['Tags'].str.get_dummies(sep=' ')
+    #df_dummies['Sentences'] = new_df['Sentences']
 
     ### SUPERVISE
-    # one hot encoding sur un set de tag assez fréquent
-    # one versus rest classifier
-    # sklearn multi label
-
-
-
+    supervise(data_train, matrixnum_tfidf, df_dummies)
+    # au hasard, prendre n questions par topic et les tags associès au topic
