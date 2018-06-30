@@ -264,7 +264,9 @@ def tfidf(new_df):
     # Création de la matrice finale
     matrixnum_tfidf, names_tfidf = creer_tfidfvectorizer(new_df['Sentences'])
     # Conversion de la matrice finale en dataframe pour facilité d'usage
-    matrixnum_tfidf = pd.DataFrame(matrixnum_tfidf, columns=names_tfidf)
+    matrixnum_tfidf = pd.DataFrame(matrixnum_tfidf,
+                                   columns=names_tfidf,
+                                   index=new_df.index)
 
     # Run LDA
     lda = LatentDirichletAllocation(n_components=20,
@@ -301,7 +303,9 @@ def countV(new_df):
     # Création de la matrice finale
     matrixnum_count, names_count = creer_countvectorizer(new_df['Sentences'])
     # Conversion de la matrice finale en dataframe pour facilité d'usage
-    matrixnum_count = pd.DataFrame(matrixnum_count, columns=names_count)
+    matrixnum_count = pd.DataFrame(matrixnum_count,
+                                   columns=names_count,
+                                   index=new_df.index)
 
     # Run LDA
     lda = LatentDirichletAllocation(n_components=20,
@@ -337,7 +341,7 @@ def comptage_metric(data, df_prevision, value):
     # Comptage des bons tags prédits
     count_tag = 0
 
-    for i in range(0, len(df_prevision)):
+    for i in df_prevision.index:
         liste_tags = word_tokenize(data.loc[i, 'Tags'])
 
         for tag in liste_tags:
@@ -347,25 +351,40 @@ def comptage_metric(data, df_prevision, value):
 
     print(round(count_tag/df_prevision.count().sum()*100, 1), '%')
 
-def non_supervise(data_train, data_test, liste_tags, nb_tags, data):
+def non_supervise(data_train, data_test, data, liste_tags, nb_tags):
     """
     Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
     puis multiplication des deux matrices
     """
 
     ### ESSAI AVEC COUNTVECTORIZER
-    matrixnum_count, name_count, lda_count = countV(data_train)
+    matrixnum_count_train, names_count_train, lda_count = countV(data_train)
+
+    # Création de la matrice finale
+    matrixnum_count_test, names_count_test = creer_countvectorizer(data_test['Sentences'])
+    # Conversion de la matrice finale en dataframe pour facilité d'usage
+    matrixnum_count_test = pd.DataFrame(matrixnum_count_test,
+                                        columns=names_count_test,
+                                        index=data_test.index)
 
     ### ESSAI AVEC TFIDFVECTORIZER
-    matrixnum_tfidf, names_tfidf, lda_tfidf = tfidf(data_train)
+    matrixnum_tfidf_train, names_tfidf_train, lda_tfidf = tfidf(data_train)
+
+    # Création de la matrice finale
+    matrixnum_tfidf_test, names_tfidf_test = creer_tfidfvectorizer(data_test['Sentences'])
+    # Conversion de la matrice finale en dataframe pour facilité d'usage
+    matrixnum_tfidf_test = pd.DataFrame(matrixnum_tfidf_test,
+                                        columns=names_tfidf_test,
+                                        index=data_test.index)
 
     # pour les deux cas
-    for matrix, names, lda in zip([matrixnum_count, matrixnum_tfidf],
-                                  [name_count, names_tfidf],
+    for matrix, names, lda in zip([matrixnum_count_test, matrixnum_tfidf_test],
+                                  [names_count_test, names_tfidf_test],
                                   [lda_count, lda_tfidf]):
 
         # Probabilité d'appartanence d'une message à un topic
         df_tp1 = pd.DataFrame(lda.transform(matrix))
+        df_tp1.index=matrix.index
 
         ## PARTIE 1
         # Probabilité d'appartanence d'un mot à un topic
@@ -378,12 +397,13 @@ def non_supervise(data_train, data_test, liste_tags, nb_tags, data):
         # Création de la matrice des mots les plus fréquents par document
         df_plus_frequent = pd.DataFrame()
 
-        for i in range(0, len(df_mots)):
+        for i in df_mots.index:
             temp = df_mots.loc[i].nlargest(5)
             temp = temp.reset_index()
             df_plus_frequent[i] = temp['index']
 
         df_plus_frequent = df_plus_frequent.T
+        df_plus_frequent.index = df_tp1.index
 
         # Comptage des bons tags prédits
         print("Avec mots")
@@ -419,37 +439,33 @@ def non_supervise(data_train, data_test, liste_tags, nb_tags, data):
         # Création de la matrice pour afficher les mots les plus fréquents par document
         df_prevision = pd.DataFrame()
 
-        for i in range(0, len(data_train)):
-            #temp = df_tags[i].nlargest(nb_tags[i])
+        for i in data_test.index:
             temp = df_tags[i].nlargest(5)
             temp = temp.reset_index()
 
             # On supprime ceux qui ne sont pas dans le body de la question
             for k, j in enumerate(temp['index']):
-                if j not in data_train.loc[i, 'Body']:
+                mot = ' ' + j + ' '
+                if mot not in data.loc[i, 'Body']:
                     temp = temp.drop(k)
 
             df_prevision = df_prevision.append(temp['index'])
 
         df_prevision = pd.DataFrame(df_prevision).reset_index(drop=True)
+        df_prevision.index = df_tp1.index
 
         # Comptage des bons tags prédits
         print("Avec tags")
         comptage_metric(data, df_prevision, 5)
 
-    return matrixnum_tfidf
+    return matrixnum_tfidf_train, matrixnum_tfidf_test
 
-def supervise(data_train, matrixnum_tfidf, df_dummies):
+def supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, df_tags_test):
     """
     # one hot encoding sur un set de tag assez fréquent
     # one versus rest classifier
     # sklearn multi label
     """
-
-    # Réduction de la dimension de la matrice des tags,
-    # on ne prends que les plus fréquents
-    mask = pd.Series(df_dummies.sum() > 50)
-    temp = df_dummies.loc[:, mask]
 
     # Score à améliorer
     obj_score = 'accuracy'
@@ -478,18 +494,40 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
         # Entraintement de l'algorithme
         #classif = OneVsRestClassifier(SVC(kernel='linear', probability=True))
         classif = OneVsRestClassifier(clf)
-        classif.fit(matrixnum_tfidf, temp)
+        classif.fit(matrixnum_tfidf_train, df_tags_train)
 
         # Predictions
-        predictions = classif.predict_proba(matrixnum_tfidf)
-        score = classif.score(matrixnum_tfidf, temp)
-        print(score)
+        predictions = classif.predict_proba(matrixnum_tfidf_test)
+        predictions = pd.DataFrame(predictions,
+                                   index=df_tags_test.index,
+                                   columns=df_tags_test.columns)
+
+        df_prevision_finale = pd.DataFrame()
+
+        for p in predictions.index:
+            temp = predictions.loc[p].nlargest(5)
+            temp = temp.reset_index()
+
+            # On supprime ceux qui ne sont pas dans le body de la question
+            for k, v in enumerate(temp['index']):
+                mot = ' ' + v + ' '
+                if mot not in data.loc[p, 'Body']:
+                    temp = temp.drop(k)
+
+            df_prevision_finale = df_prevision_finale.append(temp['index'])
+
+        df_prevision_finale = pd.DataFrame(df_prevision_finale).reset_index(drop=True)
+        df_prevision_finale.index = matrixnum_tfidf_test.index
+
+        # Comptage des bons tags prédits
+        print("Supervisé")
+        comptage_metric(data, df_prevision_finale, 5)
 
         for k in range(0, 10):
 
             # Impression de la source
-            print(data_train['Body'].loc[k][:50], "...")
-            print('Actual label :', data_train['Tags'].loc[k])
+            print(data['Body'].loc[k][:50], "...")
+            print('Actual label :', data['Tags'].loc[k])
 
             # On prends les lignes une par une
             ligne = predictions[k].copy()
@@ -497,7 +535,7 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
             # Variable list qui va prendre les résultats des prédictions
             predicted_label = []
 
-            predicted_label.append(temp.columns[np.argmax(ligne)])
+            predicted_label.append(df_tags_test.columns[np.argmax(ligne)])
 
             # On en prends 3, arbitrairement
             for p in range(0, 3):
@@ -507,7 +545,7 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
 
                 # On s'arrête si des prédictions sont moins pertinantes
                 if max(ligne) > 0.1:
-                    predicted_label.append(temp.columns[np.argmax(ligne)])
+                    predicted_label.append(df_tags_test.columns[np.argmax(ligne)])
 
             print("Predicted label :", predicted_label, "\n")
 
@@ -520,7 +558,7 @@ def main():
     data = pd.read_csv(_DOSSIER + _FICHIER, error_bad_lines=False)
 
     # Reduction de la taille
-    data = data[0:30000]
+    data = data[0:25000]
 
     # Exploration
     exploration(data)
@@ -569,18 +607,25 @@ def main():
     # On est obligé de detokenizer pour créer la matrice finale
     detokenizer = MosesDetokenizer()
     new_df['Sentences'] = [detokenizer(x) for x in new_df['Sentences']]
+    new_df['Tags'] = data['Tags']
 
-    #
-    data_train = new_df[0:20000]
-    data_test = new_df[20000:30000]
+    # Sépération des datasets
+    data_train, data_test = train_test_split(new_df, test_size=0.25)
 
     ### NON-SUPERVISE
-    matrixnum_tfidf = non_supervise(data_train, data_test, liste_tags, nb_tags, data)
+    matrixnum_tfidf_train, matrixnum_tfidf_test = non_supervise(data_train, data_test, data, liste_tags, nb_tags)
 
     # One hot encoding en prenant en compte la séparation des tags
-    df_dummies = data_train['Tags'].str.get_dummies(sep=' ')
-    #df_dummies['Sentences'] = new_df['Sentences']
+    df_tags = data['Tags'].str.get_dummies(sep=' ')
+    df_tags_train = data_train['Tags'].str.get_dummies(sep=' ')
+    df_tags_test = data_test['Tags'].str.get_dummies(sep=' ')
+
+    # Réduction de la dimension de la matrice des tags,
+    # on ne prends que les plus fréquents
+    mask = pd.Series(df_tags.sum() > 50)
+    df_tags_train = df_tags_train.loc[:, mask]
+    df_tags_test = df_tags_test.loc[:, mask]
 
     ### SUPERVISE
-    supervise(data, matrixnum_tfidf, df_dummies)
+    supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, df_tags_test)
     # au hasard, prendre n questions par topic et les tags associès au topic
