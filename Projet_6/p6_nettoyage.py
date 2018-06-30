@@ -7,8 +7,8 @@ Created on Thu May 17 21:51:03 2018
 
 # On importe les librairies dont on aura besoin pour ce tp
 import sys
-import numpy as np
 import collections
+import numpy as np
 import pandas as pd
 
 from bs4 import BeautifulSoup
@@ -21,15 +21,14 @@ from sklearn.decomposition import NMF
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from matplotlib import pyplot as plt
-from wordcloud import WordCloud
-from yellowbrick.text import FreqDistVisualizer
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier
+from matplotlib import pyplot as plt
+from wordcloud import WordCloud
+from yellowbrick.text import FreqDistVisualizer
 
 # Lieu où se trouve le fichier
 if sys.platform == "windows":
@@ -42,7 +41,39 @@ elif sys.platform == "linux":
     _DOSSIER = '/home/toni/Bureau/'
     _DOSSIERTRAVAIL = '/home/toni/python/Projet_6/images/'
 
-# faire avec et sans stemming dans les deux cas
+def exploration(data):
+    """
+    Phase d'exploration des données
+    """
+
+    # Affichae du score des questions
+    score_per_question = collections.Counter(data['Score'])
+    scorewerid, noanswers = zip(*score_per_question.most_common())
+
+    for number in [10, 25, 50]:
+        plt.bar(scorewerid[:number], noanswers[:number], align='center', alpha=0.75)
+        titre = 'Score des questions pour N=' + str(number)
+        plt.ylabel('Nombre de questions')
+        plt.xlabel('Score')
+        plt.title(titre)
+        plt.savefig(_DOSSIERTRAVAIL + titre, dpi=100)
+        plt.show()
+
+    # Tags plus fréquents
+    tagcount = comptage(list(data['Tags'])).most_common(10)
+    print(tagcount)
+    axe_x, axe_y = zip(*tagcount)
+
+    plt.figure(figsize=(9, 8))
+    titre = 'Ocurrence des tags'
+    plt.title(titre)
+    plt.ylabel("Nombre de questions concernées")
+    for i in range(len(axe_y)):
+        plt.bar(i, axe_y[i], align='center', alpha=0.75, label=axe_x[i])
+
+    plt.legend(numpoints=1)
+    plt.savefig(_DOSSIERTRAVAIL + titre, dpi=100)
+    plt.show()
 
 def creer_countvectorizer(text):
     """
@@ -134,7 +165,7 @@ def donnees_manquantes(data, nom):
 
 def display_topics(model, feature_names, no_top_words, vectype):
     """
-    TBD
+    Affichage des topics et d'un wordcloud
     """
 
     # Pour tous les topics envoyées pas le model
@@ -227,7 +258,7 @@ def comptage(data):
 
 def tfidf(new_df):
     """
-    TBD
+    Création de la matrice tfidf
     """
 
     # Création de la matrice finale
@@ -251,8 +282,8 @@ def tfidf(new_df):
     # Visualisation de la fréquence d'occurence
     ## voir la fréquence minimale
     visualizer = FreqDistVisualizer(features=names_tfidf,
-                                    n=25,
-                                    orient='v',
+                                    n=20,
+                                    orient='h',
                                     color='g')
     visualizer.fit(matrixnum_tfidf)
     visualizer.poof()
@@ -264,7 +295,7 @@ def tfidf(new_df):
 
 def countV(new_df):
     """
-    TBD
+    Création de la matrice countVectorizer
     """
 
     # Création de la matrice finale
@@ -287,7 +318,7 @@ def countV(new_df):
 
     # Visualisation de la fréquence d'occurence
     visualizer = FreqDistVisualizer(features=names_count,
-                                    n=25,
+                                    n=20,
                                     orient='h',
                                     color='g')
     visualizer.fit(matrixnum_count)
@@ -298,16 +329,16 @@ def countV(new_df):
 
     return matrixnum_count, names_count, lda
 
-def comptage_metric(data_train, df_prevision, value):
+def comptage_metric(data, df_prevision, value):
     """
-    TBD
+    Fonction de dénombrement
     """
 
     # Comptage des bons tags prédits
     count_tag = 0
 
-    for i in range(0, len(data_train)):
-        liste_tags = word_tokenize(data_train.loc[i, 'Tags'])
+    for i in range(0, len(df_prevision)):
+        liste_tags = word_tokenize(data.loc[i, 'Tags'])
 
         for tag in liste_tags:
             for j in range(0, value):
@@ -316,26 +347,27 @@ def comptage_metric(data_train, df_prevision, value):
 
     print(round(count_tag/df_prevision.count().sum()*100, 1), '%')
 
-def non_supervise(new_df, liste_tags, nb_tags, data_train):
+def non_supervise(data_train, data_test, liste_tags, nb_tags, data):
     """
     Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
     puis multiplication des deux matrices
     """
 
     ### ESSAI AVEC COUNTVECTORIZER
-    matrixnum_count, name_count, lda_count = countV(new_df)
+    matrixnum_count, name_count, lda_count = countV(data_train)
 
     ### ESSAI AVEC TFIDFVECTORIZER
-    matrixnum_tfidf, names_tfidf, lda_tfidf = tfidf(new_df)
+    matrixnum_tfidf, names_tfidf, lda_tfidf = tfidf(data_train)
 
     # pour les deux cas
     for matrix, names, lda in zip([matrixnum_count, matrixnum_tfidf],
                                   [name_count, names_tfidf],
                                   [lda_count, lda_tfidf]):
-        ## PARTIE 1
+
         # Probabilité d'appartanence d'une message à un topic
         df_tp1 = pd.DataFrame(lda.transform(matrix))
 
+        ## PARTIE 1
         # Probabilité d'appartanence d'un mot à un topic
         df_tp3 = lda.components_ / lda.components_.sum(axis=1)[:, np.newaxis]
 
@@ -343,11 +375,8 @@ def non_supervise(new_df, liste_tags, nb_tags, data_train):
         df_mots = df_tp1.dot(df_tp3)
         df_mots.columns = names
 
-        # Transformation en dataframe
-        #df_mots = pd.DataFrame(df_mots, columns=names_tfidf)#.T
-
-        # Création de la matrice pour afficher les mots les plus fréquents par document
-        df_plus_frequent = pd.DataFrame(columns=names)
+        # Création de la matrice des mots les plus fréquents par document
+        df_plus_frequent = pd.DataFrame()
 
         for i in range(0, len(df_mots)):
             temp = df_mots.loc[i].nlargest(5)
@@ -358,19 +387,16 @@ def non_supervise(new_df, liste_tags, nb_tags, data_train):
 
         # Comptage des bons tags prédits
         print("Avec mots")
-        count_tag = comptage_metric(data_train, df_plus_frequent, 5)
+        comptage_metric(data, df_plus_frequent, 5)
 
         ## PARTIE 2
-        # Probabilité d'appartanence d'une tag à un topic
-        #df_tp1 = pd.DataFrame(lda.transform(matrix))
-
-        # Probabilité d'appartanence d'un mot à un topic
+        # Probabilité d'appartanence d'un tag à un topic
         df_tp2 = pd.DataFrame(columns=liste_tags, index=range(0, 20))
 
         # Comptage d'occurence d'apparition des tags pour chaque topic
         for i in liste_tags:
             mot = ' ' + i + ' '
-            mask = data_train['Tags'].str.contains(str(mot), regex=False)
+            mask = data['Tags'].str.contains(str(mot), regex=False)
             temp = df_tp1[mask]
 
             for j in df_tp1.columns:
@@ -409,7 +435,7 @@ def non_supervise(new_df, liste_tags, nb_tags, data_train):
 
         # Comptage des bons tags prédits
         print("Avec tags")
-        count_tag = comptage_metric(data_train, df_prevision, 5)
+        comptage_metric(data, df_prevision, 5)
 
     return matrixnum_tfidf
 
@@ -422,7 +448,7 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
 
     # Réduction de la dimension de la matrice des tags,
     # on ne prends que les plus fréquents
-    mask = pd.Series(df_dummies.sum()>50)
+    mask = pd.Series(df_dummies.sum() > 50)
     temp = df_dummies.loc[:, mask]
 
     # Score à améliorer
@@ -434,7 +460,6 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
 
     # Hyperparamètres
     param_grid = [{'max_depth': [None, 30], 'n_estimators': [15]},
-                  {'max_depth': [None, 30], 'n_estimators': [15]}
                  ]
 
     # Appel de fonction avec le RandomForestRegressor
@@ -456,18 +481,18 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
         classif.fit(matrixnum_tfidf, temp)
 
         # Predictions
-        predictions=classif.predict_proba(matrixnum_tfidf)
+        predictions = classif.predict_proba(matrixnum_tfidf)
         score = classif.score(matrixnum_tfidf, temp)
         print(score)
 
-        for i in range(0, 10):
+        for k in range(0, 10):
 
             # Impression de la source
-            print(data_train['Body'].loc[i][:50], "...")
-            print('Actual label :', data_train['Tags'].loc[i])
+            print(data_train['Body'].loc[k][:50], "...")
+            print('Actual label :', data_train['Tags'].loc[k])
 
             # On prends les lignes une par une
-            ligne=predictions[i].copy()
+            ligne = predictions[k].copy()
 
             # Variable list qui va prendre les résultats des prédictions
             predicted_label = []
@@ -475,7 +500,7 @@ def supervise(data_train, matrixnum_tfidf, df_dummies):
             predicted_label.append(temp.columns[np.argmax(ligne)])
 
             # On en prends 3, arbitrairement
-            for j in range(0, 3):
+            for p in range(0, 3):
 
                 # Pour chaque tour on supprime la valeur la plus grande
                 ligne[np.argmax(ligne)] = 0
@@ -494,21 +519,23 @@ def main():
     # Récupération du dataset
     data = pd.read_csv(_DOSSIER + _FICHIER, error_bad_lines=False)
 
+    # Reduction de la taille
+    data = data[0:30000]
+
+    # Exploration
+    exploration(data)
+
     # Fusion du body et du title
     data['Body'] = data['Title'] + data['Body']
     data['Tags'] = data['Tags'].str.replace("<", "")
     data['Tags'] = data['Tags'].str.replace(">", " ")
 
-    #
-    data_train = data[0:2000]
-    data_test = data[20000:30000]
-
     # Création de la liste des tags d'origines, uniques
     liste_tags = []
     nb_tags = []
 
-    for i in range(0, len(data_train)):
-        words = word_tokenize(data_train.loc[i, 'Tags'])
+    for i in range(0, len(data)):
+        words = word_tokenize(data.loc[i, 'Tags'])
         #
         nb_tags.append(len(words))
 
@@ -520,13 +547,13 @@ def main():
     new_df = pd.DataFrame()
 
     # Données manquantes
-    donnees_manquantes(data_train, "missing_data_1")
+    donnees_manquantes(data, "missing_data_1")
 
     # Suppression des balises html et des parties de code
-    data_train['Body'] = [suppr_html_code(x) for x in data_train['Body']]
+    data['Body'] = [suppr_html_code(x) for x in data['Body']]
 
     # Comptage du nombre d'occurence
-    cpt = comptage(data_train['Body'])
+    cpt = comptage(data['Body'])
 
     # Liste des stop words anglais
     least_used = set([word for word in cpt if cpt[word] < 100])
@@ -537,19 +564,23 @@ def main():
 
     # Suppression des pluriels et des stop words
     # Rétrecissment du dataset
-    new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data_train['Body']]
+    new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data['Body']]
 
     # On est obligé de detokenizer pour créer la matrice finale
     detokenizer = MosesDetokenizer()
     new_df['Sentences'] = [detokenizer(x) for x in new_df['Sentences']]
 
+    #
+    data_train = new_df[0:20000]
+    data_test = new_df[20000:30000]
+
     ### NON-SUPERVISE
-    matrixnum_tfidf = non_supervise(new_df, liste_tags, nb_tags, data_train)
+    matrixnum_tfidf = non_supervise(data_train, data_test, liste_tags, nb_tags, data)
 
     # One hot encoding en prenant en compte la séparation des tags
     df_dummies = data_train['Tags'].str.get_dummies(sep=' ')
     #df_dummies['Sentences'] = new_df['Sentences']
 
     ### SUPERVISE
-    supervise(data_train, matrixnum_tfidf, df_dummies)
+    supervise(data, matrixnum_tfidf, df_dummies)
     # au hasard, prendre n questions par topic et les tags associès au topic
