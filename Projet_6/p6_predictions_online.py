@@ -8,21 +8,45 @@ Created on Mon Jul  2 18:23:44 2018
 
 # On importe les librairies dont on aura besoin pour ce tp
 import json
+import warnings
 import pandas as pd
 from flask import Flask, request
 from sklearn.externals import joblib
-#from mosestokenizer import MosesDetokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk import wordnet
 from nltk.tokenize import word_tokenize
 
-import warnings
 warnings.filterwarnings("ignore")
 
 # Lieu où se trouve le fichier
-_DOSSIERWEB = '/home/toni/python/Projet_6/images/'
+_DOSSIERWEB = '/home/pfroide/mysite/p6/'
 
 # Création de la route d'entrée de l'API
+app = Flask(__name__)
+@app.route('/texte/', methods=['GET', 'POST'])
+
+def recuperation():
+    """
+    Fonction principale de recupération du texte
+    """
+    if request.method == 'POST':
+        texte_source = request.form['title'] + request.form['contenu']
+        return predict(texte_source)
+
+    # On renvoie le résultat en format JSON
+    return """<form action="" method="POST">
+        <p>
+            <label for="title">Titre de la question :</label>
+            <input type="text" id="title" name="title" />
+        </p>
+        <p>
+            <textarea id="contenu" name="contenu" rows="10" cols="50">
+            </textarea>
+        </p>
+        <p>
+            <input type="submit" value="Envoyer" />
+        </p>
+    </form>"""
 
 def fct_nltk(text, stop_words):
     """
@@ -45,7 +69,10 @@ def fct_nltk(text, stop_words):
     # Sortie
     return new_sentence
 
-def predict(texte):
+def predict(texte_origine):
+    """
+    Fonction de prédiction
+    """
 
     # Création du dataframe vide pour avoir le nom des colonnes
     fichier = "RandomForestClassifier_30_10.pkl"
@@ -56,7 +83,7 @@ def predict(texte):
     # Nettoyage du texte
     fichier2 = _DOSSIERWEB + "stop.pkl"
     stop_words = joblib.load(fichier2)
-    texte = fct_nltk(texte, stop_words)
+    texte = fct_nltk(texte_origine, stop_words)
     texte = " ".join(texte)
 
     # Création de l'objet
@@ -67,18 +94,21 @@ def predict(texte):
     liste_tags = t_vectorizer.get_feature_names()
     matrix = pd.DataFrame(matrix, columns=liste_tags)
 
-    #
+    # On va chercher les index sauvegardés pour gagner du temps sur la prédiction
     fichier3 = _DOSSIERWEB + "index.pkl"
     index_c = joblib.load(fichier3)
 
+    # Avec ces deux boucles, on les copies et on s'assure que tous les index
+    # sont présents
     for i in index_c:
         if i not in liste_tags:
-            matrix[i]=0
+            matrix[i] = 0
 
     for i in matrix.columns:
         if i not in index_c:
             del matrix[i]
 
+    # On va chercher les colonnes sauvegardées pour gagner du temps sur la prédiction
     fichier4 = _DOSSIERWEB + "colonnes.pkl"
     colonnes = joblib.load(fichier4)
 
@@ -88,18 +118,12 @@ def predict(texte):
 
     df_prevision_finale = pd.DataFrame()
 
-    for p in predictions.index:
-        temp = predictions.loc[p]
-        temp = temp[temp>0]
+    for pred in predictions.index:
+        temp = predictions.loc[pred]
+        temp = temp[temp > 0]
         temp = temp.nlargest(5)
         temp = temp.reset_index()
         temp = temp.rename(columns={"index": 'autre'})
-
-        # On supprime ceux qui ne sont pas dans le body de la question
-        #for k, v in enumerate(temp['index']):
-        #    mot = ' ' + v + ' '
-        #    if mot not in texte:
-        #        temp = temp.drop(k)
 
         df_prevision_finale = df_prevision_finale.append(temp['autre'])
 
@@ -115,15 +139,8 @@ def predict(texte):
     #    if not pd.isna(word):
         predicted_label.append(word)
 
-    print("Predicted label :", predicted_label, "\n")
-
-    # Résultat de la prédiction, transformation en json
-    dico = {}
-    for nb, key in enumerate(predicted_label):
-        dico[str(nb)] = str(key)
-
     # Transformation en format JSON
-    json_dico = json.dumps(dico, indent=4, separators=(',', ': '))
+    json_dico = json.dumps(predicted_label, indent=4, separators=(',', ': '))
 
     # On renvoie la valeur trouvée
     return json_dico
