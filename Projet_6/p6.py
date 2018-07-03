@@ -9,7 +9,6 @@ Created on Thu May 17 21:51:03 2018
 import sys
 import warnings
 import collections
-import numpy as np
 import pandas as pd
 
 from bs4 import BeautifulSoup
@@ -17,21 +16,16 @@ from nltk import wordnet
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from mosestokenizer import MosesDetokenizer
+from sklearn.externals import joblib
 from sklearn.decomposition import LatentDirichletAllocation
-from sklearn.decomposition import NMF
 from sklearn.decomposition import TruncatedSVD
-from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multiclass import OneVsRestClassifier
-from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import GradientBoostingClassifier
 from matplotlib import pyplot as plt
 from wordcloud import WordCloud
 from yellowbrick.text import FreqDistVisualizer
-from sklearn.externals import joblib
 
 # Pour ne pas avoir les warnings lors de la compilation
 warnings.filterwarnings("ignore")
@@ -42,12 +36,14 @@ _RECALCUL_JOBLIB = False
 if sys.platform == "windows":
     _FICHIER = 'QueryResults.csv'
     _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p6\\'
-    _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images'
+    _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images\\'
+    _DOSSIERPKL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\pkl\\'
 
 elif sys.platform == "linux":
     _FICHIER = 'stackoverflow_train_dataset.csv'
     _DOSSIER = '/home/toni/Bureau/'
     _DOSSIERTRAVAIL = '/home/toni/python/Projet_6/images/'
+    _DOSSIERPKL = '/home/toni/python/Projet_6/pkl/'
 
 def exploration(data):
     """
@@ -249,7 +245,7 @@ def comptage(data):
 
     return count
 
-def tfidf(new_df, data):
+def tfidf(new_df):
     """
     Création de la matrice tfidf
     """
@@ -311,25 +307,18 @@ def comptage_metric(data, df_prevision, value):
 
     print(round(count_tag/df_prevision.count().sum()*100, 1), '%')
 
-def non_supervise(new_df, data, liste_tags, nb_tags):
+def non_supervise(new_df, data, liste_tags):
     """
     Il faut deux matrices (distribution de proba) : documents/topic et topic/mots
     puis multiplication des deux matrices
     """
 
     ### ESSAI AVEC TFIDFVECTORIZER
-    matrixnum_tfidf_train, matrixnum_tfidf_test, names_tfidf, lda_tfidf = tfidf(new_df, data)
-
-    # Création de la matrice finale
-    #matrixnum_tfidf_test, names_tfidf_test = creer_tfidfvectorizer(data_test['Sentences'])
-    # Conversion de la matrice finale en dataframe pour facilité d'usage
-    #matrixnum_tfidf_test = pd.DataFrame(matrixnum_tfidf_test,
-    #                                    columns=names_tfidf_test,
-    #                                    index=data_test.index)
+    matrixnum_tfidf_train, matrixnum_tfidf_test, names_tfidf, lda_tfidf = tfidf(new_df)
 
     # Probabilité d'appartanence d'une message à un topic
     df_tp1 = pd.DataFrame(lda_tfidf.transform(matrixnum_tfidf_test))
-    df_tp1.index=matrixnum_tfidf_test.index
+    df_tp1.index = matrixnum_tfidf_test.index
 
     ## PARTIE 1
     # Probabilité d'appartanence d'un mot à un topic
@@ -369,11 +358,6 @@ def non_supervise(new_df, data, liste_tags, nb_tags):
 
     # Convertion en float
     df_tp2 = df_tp2.astype(float)
-
-    ## Mise au même poids avec ce dénominateur
-    #div = df_tp2.sum(axis=1)[:, np.newaxis]
-    #for i in range(0, len(df_tp2)):
-    #    df_tp2.loc[i] = df_tp2.loc[i] / div[i]
 
     # Multiplication des deux matrices pour obtenir la proba documents/mots
     df_tags = df_tp1.dot(df_tp2)
@@ -423,11 +407,7 @@ def supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, 
         name = model.__class__.__name__ + '_' + str(model.max_depth) + '_' + str(model.n_estimators)
 
         # Localisation de du fichier du fit sauvegardé
-        fichier = _DOSSIERTRAVAIL + "/" + name + ".pkl"
-
-    #    # Hyperparamètres
-    #    param_grid = [{'max_depth': [None, 30], 'n_estimators': [15]},
-    #                 ]
+        fichier = _DOSSIERPKL + "/" + name + ".pkl"
 
         print(name, "\n")
 
@@ -452,16 +432,16 @@ def supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, 
 
         df_prevision_finale = pd.DataFrame()
 
-        for p in predictions.index:
-            temp = predictions.loc[p]
-            temp = temp[temp>0]
+        for pred in predictions.index:
+            temp = predictions.loc[pred]
+            temp = temp[temp > 0]
             temp = temp.nlargest(5)
             temp = temp.reset_index()
 
             # On supprime ceux qui ne sont pas dans le body de la question
-            for k, v in enumerate(temp['index']):
-                mot = ' ' + v + ' '
-                if mot not in data.loc[p, 'Body']:
+            for k, val in enumerate(temp['index']):
+                mot = ' ' + val + ' '
+                if mot not in data.loc[pred, 'Body']:
                     temp = temp.drop(k)
 
             df_prevision_finale = df_prevision_finale.append(temp['index'])
@@ -486,7 +466,7 @@ def supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, 
                     predicted_label.append(word)
 
             # Impression du resultat
-            if len(predicted_label) > 0:
+            if not predicted_label:
                 print(data['Body'].loc[k][:80], "...")
                 print('Actual label :', data['Tags'].loc[k])
                 print("Predicted label :", predicted_label, "\n")
@@ -512,13 +492,9 @@ def main():
 
     # Création de la liste des tags d'origines, uniques
     liste_tags = []
-    nb_tags = []
 
     for i in range(0, len(data)):
         words = word_tokenize(data.loc[i, 'Tags'])
-        #
-        nb_tags.append(len(words))
-
         for j in words:
             if j.isalpha() and (j not in liste_tags):
                 liste_tags.append(j)
@@ -542,11 +518,6 @@ def main():
                 | set([word for word, freq, in cpt.most_common(100)]) \
                 | least_used
 
-    # Test
-    #fichier = _DOSSIERTRAVAIL + "stop.pkl"
-    #joblib.dump(stop_words, fichier)
-    #p = joblib.load(fichier)
-
     # Suppression des pluriels et des stop words
     # Rétrecissment du dataset
     new_df['Sentences'] = [fct_nltk(x, stop_words) for x in data['Body']]
@@ -557,7 +528,7 @@ def main():
     new_df['Tags'] = data['Tags']
 
     ### NON-SUPERVISE
-    matrixnum_tfidf_train, matrixnum_tfidf_test = non_supervise(new_df, data, liste_tags, nb_tags)
+    matrixnum_tfidf_train, matrixnum_tfidf_test = non_supervise(new_df, data, liste_tags)
 
     # Sépération des datasets
     data_train, data_test = train_test_split(new_df,
