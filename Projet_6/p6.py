@@ -23,6 +23,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import SGDClassifier
 from matplotlib import pyplot as plt
 from wordcloud import WordCloud
 from yellowbrick.text import FreqDistVisualizer
@@ -31,6 +32,8 @@ from yellowbrick.text import FreqDistVisualizer
 warnings.filterwarnings("ignore")
 
 _RECALCUL_JOBLIB = False
+_MINDF = 0.01
+_N_COMPONENTS = 20
 
 # Lieu où se trouve le fichier
 if sys.platform == "windows":
@@ -86,7 +89,7 @@ def creer_tfidfvectorizer(text):
     """
 
     # Création de l'objet
-    t_vectorizer = TfidfVectorizer(min_df=0.01)
+    t_vectorizer = TfidfVectorizer(min_df=_MINDF)
 
     # Fit du texte d'entrée, et mis au format tableau
     liste_mots = t_vectorizer.fit_transform(text).toarray()
@@ -263,7 +266,7 @@ def tfidf(new_df):
                                                                    random_state=3)
 
     # Run LDA
-    lda = LatentDirichletAllocation(n_components=20,
+    lda = LatentDirichletAllocation(n_components=_N_COMPONENTS,
                                     #max_iter=5,
                                     #learning_method='online',
                                     #learning_offset=50,
@@ -402,9 +405,16 @@ def supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, 
               RandomForestClassifier(n_estimators=30, max_depth=30),
               RandomForestClassifier(n_estimators=30, max_depth=None)]
 
+    #models = [SGDClassifier(loss='log', penalty='none'),
+    #          SGDClassifier(loss='log', penalty='l2'),
+    #          SGDClassifier(loss='log', penalty='l1'),
+    #          SGDClassifier(loss='log', penalty='elasticnet'),
+    #        ]
+
     for model in models:
         # Nom du classifieur
-        name = model.__class__.__name__ + '_' + str(model.max_depth) + '_' + str(model.n_estimators)
+        #name = model.__class__.__name__ + '_' + str(model.max_depth) + '_' + str(model.n_estimators)
+        name = model.__class__.__name__ + '_' + str(model.loss) + '_' + str(model.penalty)
 
         # Localisation de du fichier du fit sauvegardé
         fichier = _DOSSIERPKL + "/" + name + ".pkl"
@@ -423,6 +433,22 @@ def supervise(data, matrixnum_tfidf_train, matrixnum_tfidf_test, df_tags_train, 
         else:
             # On va chercher le dump
             classif = joblib.load(fichier)
+
+        # On va chercher les index sauvegardés pour gagner du temps sur la prédiction
+        fichier3 = _DOSSIERTRAVAIL + "index.pkl"
+        index_c = joblib.load(fichier3)
+
+        liste_tags = matrixnum_tfidf_test.columns
+
+        # Avec ces deux boucles, on les copies et on s'assure que tous les index
+        # sont présents
+        for i in index_c:
+            if i not in liste_tags:
+                matrixnum_tfidf_test[i] = 0
+
+        for i in matrixnum_tfidf_test.columns:
+            if i not in index_c:
+                del matrixnum_tfidf_test[i]
 
         # Predictions
         predictions = classif.predict_proba(matrixnum_tfidf_test)
