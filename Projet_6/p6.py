@@ -276,16 +276,16 @@ def tfidf(new_df):
     lda.fit(matrixnum_tfidf_train)
 
     # Visualisation de la liste des mots, plus nuage de mots
-    display_topics(lda, names_tfidf, 15, 'lda')
+    #display_topics(lda, names_tfidf, 15, 'lda')
 
     # Visualisation de la fréquence d'occurence
     ## voir la fréquence minimale
-    visualizer = FreqDistVisualizer(features=names_tfidf,
-                                    n=20,
-                                    orient='h',
-                                    color='g')
-    visualizer.fit(matrixnum_tfidf_train)
-    visualizer.poof()
+    #visualizer = FreqDistVisualizer(features=names_tfidf,
+    #                                n=20,
+    #                                orient='h',
+    #                                color='g')
+    #visualizer.fit(matrixnum_tfidf_train)
+    #visualizer.poof()
 
     # Tentative de réduction de la dimension
     #matrixnum_tfidf_num = reduction_dimension(matrixnum_tfidf, 500, 'lda')
@@ -308,7 +308,8 @@ def comptage_metric(data, df_prevision, value):
                 if tag == df_prevision.loc[i, j]:
                     count_tag = count_tag + 1
 
-    print(round(count_tag/df_prevision.count().sum()*100, 1), '%')
+    print("Bons tags / Nb de tags prédit")
+    print(round((count_tag/df_prevision.count().sum())*100, 1), '%')
 
 def non_supervise(new_df, data, liste_tags):
     """
@@ -348,7 +349,7 @@ def non_supervise(new_df, data, liste_tags):
 
     ## PARTIE 2
     # Probabilité d'appartanence d'un tag à un topic
-    df_tp2 = pd.DataFrame(columns=liste_tags, index=range(0, 20))
+    df_tp2 = pd.DataFrame(columns=liste_tags, index=range(0, _N_COMPONENTS))
 
     # Comptage d'occurence d'apparition des tags pour chaque topic
     for i in liste_tags:
@@ -554,7 +555,12 @@ def main():
     new_df['Tags'] = data['Tags']
 
     ### NON-SUPERVISE
-    matrixnum_tfidf_train, matrixnum_tfidf_test = non_supervise(new_df, data, liste_tags)
+    for i in [0.01, 0.03, 0.05]:
+        _MINDF = i
+        for j in [10, 20]:
+            _N_COMPONENTS = j
+            print(_MINDF, _N_COMPONENTS)
+            matrixnum_tfidf_train, matrixnum_tfidf_test = non_supervise(new_df, data, liste_tags)
 
     # Sépération des datasets
     data_train, data_test = train_test_split(new_df,
