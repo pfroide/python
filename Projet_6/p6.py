@@ -36,17 +36,17 @@ _MINDF = 0.01
 _N_COMPONENTS = 20
 
 # Lieu où se trouve le fichier
-if sys.platform == "windows":
-    _FICHIER = 'QueryResults.csv'
-    _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p6\\'
-    _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images\\'
-    _DOSSIERPKL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\pkl\\'
-
-elif sys.platform == "linux":
+if sys.platform == "linux":
     _FICHIER = 'stackoverflow_train_dataset.csv'
     _DOSSIER = '/home/toni/Bureau/'
     _DOSSIERTRAVAIL = '/home/toni/python/Projet_6/images/'
     _DOSSIERPKL = '/home/toni/python/Projet_6/pkl/'
+
+else:
+    _FICHIER = 'QueryResults.csv'
+    _DOSSIER = 'C:\\Users\\Toni\\Desktop\\pas_synchro\\p6\\'
+    _DOSSIERTRAVAIL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\images\\'
+    _DOSSIERPKL = 'C:\\Users\\Toni\\python\\python\\Projet_6\\pkl\\'
 
 def exploration(data):
     """
