@@ -33,6 +33,14 @@ def main():
     X_test = test.data
     y_train = train.target
     y_target = test.target
+
+    # C'est trop de données, donc je réduis un peu.
+    # A mettre en commentaire si nécessaire
+    X_train = X_train[:10000]
+    X_test = X_test[:10000]
+    y_train = y_train[:10000]
+    y_target = y_target[:10000]
+
     print("... done\n")
 
     # 1ère évaluateur
