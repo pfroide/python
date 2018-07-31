@@ -6,6 +6,13 @@ Created on Mon Jul 23 22:19:42 2018
 @author: toni
 """
 import keras
+import os
+import tensorflow as tf
+
+os.environ["CUDA_VISIBLE_DEVICES"]=""
+
+config = tf.ConfigProto(device_count = {'GPU': 0})
+sess = tf.Session(config=config)
 
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D
