@@ -46,6 +46,7 @@ import numpy as np
 
 #setup a standard image size; this will distort some images but will get everything into the same shape
 STANDARD_SIZE = (300, 167)
+STANDARD_SIZE = (500, 375)
 
 def img_to_matrix(filename, verbose=False):
     """
@@ -72,42 +73,87 @@ def flatten_image(img):
     img_wide = img.reshape(1, s)
     return img_wide[0]
 
+def classification_retards(data):
+    """
+    TBD
+    """
+
+    # Classification des retards
+    for dataset in data:
+        data.loc[data['ARR_DELAY'] <= 15, 'CLASSE_DELAY'] = "Leger"
+        data.loc[data['ARR_DELAY'] >= 15, 'CLASSE_DELAY'] = "Moyen"
+        data.loc[data['ARR_DELAY'] >= 45, 'CLASSE_DELAY'] = "Important"
+        data.loc[data['ARR_DELAY'] < 0, 'CLASSE_DELAY'] = "En avance"
+
+    # Affichage de la classification des retards
+    f, ax = plt.subplots(1, 2, figsize=(20, 8))
+    data['CLASSE_DELAY'].value_counts().plot.pie(autopct='%1.1f%%', ax=ax[0], shadow=True)
+    ax[0].set_title('CLASSE_DELAY')
+    ax[0].set_ylabel('')
+    sns.countplot('CLASSE_DELAY',order=data['CLASSE_DELAY'].value_counts().index, data=data, ax=ax[1])
+    ax[1].set_title('Status')
+    plt.tight_layout()
+    #plt.savefig(_DOSSIERTRAVAIL + '\\' + 'classification_retards', dpi=100)
+    plt.show()
+
+    del data['CLASSE_DELAY']
+
 def main():
     """
     TBD
     """
 
     img_dir = '/home/toni/Bureau/p7/Images/' # n02090379-redbone/'
-    images = [img_dir+ f for f in os.listdir(img_dir)]
+    #images = [img_dir+ f for f in os.listdir(img_dir)]
     #labels = ["check" if "check" in f.split('/')[-1] else "redbone" for f in images]
 
     data = []
     labels = []
+    spec_images = pd.DataFrame()
+
     i=0
+
+    from scipy import misc
 
     for path, dirs, files in os.walk(img_dir):
         for filename in files:
-            if i<1000:
+            M = misc.imread(path + '/' + filename)
+            titre = path + '/' + filename
+            spec_images.loc[titre, 0] = M.shape[0]
+            spec_images.loc[titre, 1] = M.shape[1]
+            spec_images.loc[titre, 2] = M.shape[2]
+            spec_images.loc[titre, 3] = str(M.shape[0]) + '-' + str(M.shape[1]) + '-' + str(M.shape[2])
+
+    df = spec_images.groupby(3)[0].count()
+
+    import matplotlib.pyplot as plt
+    plt.pie(df, autopct='%1.1f%%', shadow=True, startangle=90)
+    plt.axis('equal')
+    plt.show()
+
+    for path, dirs, files in os.walk(img_dir):
+        i=0
+        for filename in files:
+            if i<10:
                 i=i+1
-                print(filename)
+                if i%100==0:
+                    #print(filename)
+                    print(i)
                 img = img_to_matrix(path + '/' + filename)
                 img = flatten_image(img)
                 data.append(img)
-                labels.append(path)
+                #labels.append(path)
+                labels.append(path[path.find('-')+1:])
 
-#    for image in images:
-#        img = img_to_matrix(image)
-#        img = flatten_image(img)
-#        data.append(img)
-
-    data = np.array(data)
+    #data = np.array(data).astype(int)
     data
 
-    train_x, test_x, train_y, test_y = train_test_split(data, labels, test_size=0.25, random_state=42)
+    train_x, test_x, train_y, test_y = train_test_split(data, labels, test_size=0.25)
 
     pca = RandomizedPCA(n_components=10)
     train_x = pca.fit_transform(train_x)
     print(pca.explained_variance_ratio_ )
+    print(pca.explained_variance_ratio_.sum())
     test_x = pca.transform(test_x)
     knn = KNeighborsClassifier()
     knn.fit(train_x, train_y)
