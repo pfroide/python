@@ -7,20 +7,25 @@ Created on Mon Jul 30 21:38:27 2018
 """
 
 import scipy.io
+import pandas as pd
+from scipy import misc
+import matplotlib.pyplot as plt
 from sklearn.decomposition import RandomizedPCA
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
-import pandas as pd
+import os
+from PIL import Image
+import numpy as np
 
-# Import to a python dictionary
-mat = scipy.io.loadmat('/home/toni/Bureau/p7/test_data.mat')
 
-# Look at the dictionary items
-mat.items()
-
-# Print the data
-m = mat["test_data"]
-
+## Import to a python dictionary
+#mat = scipy.io.loadmat('/home/toni/Bureau/p7/test_data.mat')
+#
+## Look at the dictionary items
+#mat.items()
+#
+## Print the data
+#m = mat["test_data"]
 
 # =============================================================================
 # Une approche classique : il s’agit de pre-processer des images avec des
@@ -39,10 +44,6 @@ m = mat["test_data"]
 # possibles, sans que cela ne se substitue à des mesures de performances
 # rigoureuses.
 # =============================================================================
-
-import os
-from PIL import Image
-import numpy as np
 
 #setup a standard image size; this will distort some images but will get everything into the same shape
 STANDARD_SIZE = (300, 167)
@@ -73,31 +74,6 @@ def flatten_image(img):
     img_wide = img.reshape(1, s)
     return img_wide[0]
 
-def classification_retards(data):
-    """
-    TBD
-    """
-
-    # Classification des retards
-    for dataset in data:
-        data.loc[data['ARR_DELAY'] <= 15, 'CLASSE_DELAY'] = "Leger"
-        data.loc[data['ARR_DELAY'] >= 15, 'CLASSE_DELAY'] = "Moyen"
-        data.loc[data['ARR_DELAY'] >= 45, 'CLASSE_DELAY'] = "Important"
-        data.loc[data['ARR_DELAY'] < 0, 'CLASSE_DELAY'] = "En avance"
-
-    # Affichage de la classification des retards
-    f, ax = plt.subplots(1, 2, figsize=(20, 8))
-    data['CLASSE_DELAY'].value_counts().plot.pie(autopct='%1.1f%%', ax=ax[0], shadow=True)
-    ax[0].set_title('CLASSE_DELAY')
-    ax[0].set_ylabel('')
-    sns.countplot('CLASSE_DELAY',order=data['CLASSE_DELAY'].value_counts().index, data=data, ax=ax[1])
-    ax[1].set_title('Status')
-    plt.tight_layout()
-    #plt.savefig(_DOSSIERTRAVAIL + '\\' + 'classification_retards', dpi=100)
-    plt.show()
-
-    del data['CLASSE_DELAY']
-
 def main():
     """
     TBD
@@ -107,13 +83,8 @@ def main():
     #images = [img_dir+ f for f in os.listdir(img_dir)]
     #labels = ["check" if "check" in f.split('/')[-1] else "redbone" for f in images]
 
-    data = []
-    labels = []
+    # Création du dataframe vide
     spec_images = pd.DataFrame()
-
-    i=0
-
-    from scipy import misc
 
     for path, dirs, files in os.walk(img_dir):
         for filename in files:
@@ -126,24 +97,36 @@ def main():
 
     df = spec_images.groupby(3)[0].count()
 
-    import matplotlib.pyplot as plt
-    plt.pie(df, autopct='%1.1f%%', shadow=True, startangle=90)
-    plt.axis('equal')
-    plt.show()
-
+    #plt.pie(df, autopct='%1.1f%%', shadow=True, startangle=90)
+    #plt.axis('equal')
+    #plt.show()
+    
+    NB_RACES = 3
+    NB_EXEMPLES = 20
+    j = 0
+    
+    # Création des listes vides
+    data = []
+    labels = []
+    
     for path, dirs, files in os.walk(img_dir):
         i=0
-        for filename in files:
-            if i<10:
-                i=i+1
-                if i%100==0:
-                    #print(filename)
-                    print(i)
-                img = img_to_matrix(path + '/' + filename)
-                img = flatten_image(img)
-                data.append(img)
-                #labels.append(path)
-                labels.append(path[path.find('-')+1:])
+        if j<NB_RACES+1:
+            j=j+1
+            for filename in files:
+                # On ne garde que 10 exemplaires de chaque race
+                if i<NB_EXEMPLES:
+                    i=i+1
+                    # Affichage pour voir si ça tourne toujours
+                    if i%10==0:
+                        print(i, filename)
+                    # Récupération de la matrice tranformée
+                    img = img_to_matrix(path + '/' + filename)
+                    # Mise à une dimension
+                    img = flatten_image(img)
+                    data.append(img)
+                    # Rajout du label
+                    labels.append(path[path.find('-')+1:])
 
     #data = np.array(data).astype(int)
     data
