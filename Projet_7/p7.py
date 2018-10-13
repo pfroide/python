@@ -6,17 +6,16 @@ Created on Mon Jul 30 21:38:27 2018
 @author: toni
 """
 
-import scipy.io
-import pandas as pd
+import os
+import random
+import numpy as np
 from scipy import misc
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.decomposition import RandomizedPCA
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
-import os
 from PIL import Image
-import numpy as np
-
 
 ## Import to a python dictionary
 #mat = scipy.io.loadmat('/home/toni/Bureau/p7/test_data.mat')
@@ -47,7 +46,7 @@ import numpy as np
 
 #setup a standard image size; this will distort some images but will get everything into the same shape
 STANDARD_SIZE = (300, 167)
-STANDARD_SIZE = (500, 375)
+#STANDARD_SIZE = (500, 375)
 
 def img_to_matrix(filename, verbose=False):
     """
@@ -79,65 +78,85 @@ def main():
     TBD
     """
 
+    # Définitions des limites d'execution
+    NB_RACES = 8
+    NB_EXEMPLES = 100
+
     img_dir = '/home/toni/Bureau/p7/Images/' # n02090379-redbone/'
     #images = [img_dir+ f for f in os.listdir(img_dir)]
     #labels = ["check" if "check" in f.split('/')[-1] else "redbone" for f in images]
 
-    # Création du dataframe vide
-    spec_images = pd.DataFrame()
+#    # Création du dataframe vide
+#    spec_images = pd.DataFrame()
 
-    for path, dirs, files in os.walk(img_dir):
-        for filename in files:
-            M = misc.imread(path + '/' + filename)
-            titre = path + '/' + filename
-            spec_images.loc[titre, 0] = M.shape[0]
-            spec_images.loc[titre, 1] = M.shape[1]
-            spec_images.loc[titre, 2] = M.shape[2]
-            spec_images.loc[titre, 3] = str(M.shape[0]) + '-' + str(M.shape[1]) + '-' + str(M.shape[2])
+    # Partie pour récupérer les tailles des images.
+    # Pas forcément utile
+#    for path, dirs, files in os.walk(img_dir):
+#        for filename in files:
+#            image = misc.imread(path + '/' + filename)
+#            titre = path + '/' + filename
+#            spec_images.loc[titre, 0] = image.shape[0]
+#            spec_images.loc[titre, 1] = image.shape[1]
+#            spec_images.loc[titre, 2] = image.shape[2]
+#            spec_images.loc[titre, 3] = str(image.shape[0]) + '-' + \
+#                                        str(image.shape[1]) + '-' + \
+#                                        str(image.shape[2])
+#
+#    df = spec_images.groupby(3)[0].count()
 
-    df = spec_images.groupby(3)[0].count()
+    # Valeur initiale d'un compteur
+    cpt_race = 0
 
-    #plt.pie(df, autopct='%1.1f%%', shadow=True, startangle=90)
-    #plt.axis('equal')
-    #plt.show()
-    
-    NB_RACES = 3
-    NB_EXEMPLES = 20
-    j = 0
-    
     # Création des listes vides
     data = []
     labels = []
-    
-    for path, dirs, files in os.walk(img_dir):
-        i=0
-        if j<NB_RACES+1:
-            j=j+1
-            for filename in files:
+
+    liste_dossier = []
+    p = os.listdir(img_dir)
+
+    # Création de la liste aléatoire des races
+    for i in range(0, NB_RACES):
+        nb_alea = random.randrange(0, len(p))
+        liste_dossier.append(p[nb_alea])
+        del p[nb_alea]
+
+    for dirs in liste_dossier:
+        # Valeur initiale d'un compteur
+        cpt_exemple = 0
+        if cpt_race < NB_RACES+1:
+            cpt_race = cpt_race+1
+            for filename in os.listdir(img_dir + dirs):
                 # On ne garde que 10 exemplaires de chaque race
-                if i<NB_EXEMPLES:
-                    i=i+1
+                if cpt_exemple < NB_EXEMPLES:
+                    cpt_exemple = cpt_exemple+1
+
                     # Affichage pour voir si ça tourne toujours
-                    if i%10==0:
-                        print(i, filename)
+                    if cpt_exemple%25 == 0:
+                        print(cpt_exemple, dirs + '/' + filename)
+
                     # Récupération de la matrice tranformée
-                    img = img_to_matrix(path + '/' + filename)
+                    img = img_to_matrix(img_dir + dirs + '/' + filename)
+
                     # Mise à une dimension
                     img = flatten_image(img)
                     data.append(img)
+
                     # Rajout du label
-                    labels.append(path[path.find('-')+1:])
+                    labels.append(dirs[dirs.find('-')+1:])
 
-    #data = np.array(data).astype(int)
-    data
+                    del img
 
+    # Séparation des datasets testing/training
     train_x, test_x, train_y, test_y = train_test_split(data, labels, test_size=0.25)
 
+    # Réduction de dimension
     pca = RandomizedPCA(n_components=10)
     train_x = pca.fit_transform(train_x)
-    print(pca.explained_variance_ratio_ )
-    print(pca.explained_variance_ratio_.sum())
     test_x = pca.transform(test_x)
+
+    print(pca.explained_variance_ratio_)
+    print(pca.explained_variance_ratio_.sum())
+
     knn = KNeighborsClassifier()
     knn.fit(train_x, train_y)
 
@@ -145,4 +164,11 @@ def main():
     train_y = np.array(train_y)
 
     res = pd.crosstab(test_y, knn.predict(test_x))
-    knn.score(test_y, knn.predict(test_x))
+    res1 = res.values
+
+    # Affichage des résultats
+    print("Resultats :", round(100*res1.diagonal().sum()/len(test_y), 2), "%")
+    for i in range(0, len(res)):
+        print(res.index[i], ":", round(100*res1.diagonal()[i]/res.sum()[i], 2), "%")
+
+#    knn.score(test_y, knn.predict(test_x))
