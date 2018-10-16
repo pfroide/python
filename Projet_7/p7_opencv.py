@@ -30,10 +30,11 @@ orb = cv2.ORB_create()
 detector = orb
 key_points = []
 description = []
+labels = []
 
 for i, filename in enumerate(os.listdir(liste_dossier)):
-    print(i)
     # On ne garde que NB_EXEMPLES exemplaires de chaque race
     a, b, c = image_detect_and_compute(detector, filename)
     key_points.append(b)
-    description.append(b)
+    description.append(c)
+    #labels.append(dirs[dirs.find('-')+1:].lower())
