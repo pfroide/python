@@ -47,8 +47,8 @@ warnings.filterwarnings("ignore")
 IMG_DIR = '/home/toni/Bureau/p7/Images/'
 
 # Définitions des limites d'execution
-NB_RACES = 10
-NB_EXEMPLES = 10
+NB_RACES = 20
+NB_EXEMPLES = 100
 
 #setup a standard image size; this will distort images but will get everything into the same shape
 STANDARD_SIZE = (300, 167)
@@ -109,6 +109,7 @@ def recup_images(liste_dossier, num_filtre):
     # Création des listes vides
     data = []
     labels = []
+    des_list = []
 
     # Valeur initiale d'un compteur
     cpt_race = 0
@@ -141,19 +142,26 @@ def recup_images(liste_dossier, num_filtre):
                         img = fonction_median(img, 5)
                     elif num_filtre == 3:
                         img = whiten(img)
-                    elif num_filtre == 4:
-                        image_brute = IMG_DIR + dirs + '/' + filename
-                        a, b = image_detect_and_compute(orb, image_brute)
-                        data.append(b)
+#                    elif num_filtre == 4:
+#                        image_brute = IMG_DIR + dirs + '/' + filename
+#                        a, b = image_detect_and_compute(orb, image_brute)
+#                        des_list.append((a, b))
+#                        img = b
 
                     # Mise à une dimension
-                    #img = flatten_image(img)
-                    #data.append(img)
+                    img = flatten_image(img)
+                    data.append(img)
 
                     # Rajout du label
                     labels.append(dirs[dirs.find('-')+1:].lower())
 
                     del img
+
+#    # Stack all the descriptors vertically in a numpy array
+#    descriptors = des_list[0][1]
+#    for image_path, descriptor in des_list[1:]:
+#        # Stacking the descriptors
+#        descriptors = np.vstack((descriptors, descriptor))
 
     return data, labels
 
@@ -194,7 +202,6 @@ def calcul_resultats(res, test_y, classifieur):
         data_resultats.loc[res.index[i], 'total'] = res.sum('columns')[i]
         data_resultats.loc[res.index[i], 'pc_prono'] = round(100*diagonale/res.sum()[i], 2)
         data_resultats.loc[res.index[i], 'pc_total'] = round(100*diagonale/res.sum('columns')[i], 2)
-        #print(res.index[i], ":", round(100*res1.diagonal()[i]/res.sum()[i], 2), "%")
 
     data_resultats = data_resultats.fillna(0)
 
@@ -215,7 +222,7 @@ def main():
         del liste_chiens[nb_alea]
 
     ## Différents filtres
-    for filtre in range(4, 5):
+    for filtre in range(0, 4):
         # FILTRE 0 - AUCUN
         # FILTRE 1- GAUSSIEN
         # FILTRE 2 - MEDIAN
