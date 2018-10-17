@@ -6,26 +6,7 @@ Created on Mon Jul 30 21:38:27 2018
 @author: toni
 """
 
-# =============================================================================
-# Une approche classique : il s’agit de pre-processer des images avec des
-# techniques spécifiques (e.g. whitening, equalisation,
-# filtre linéaire/laplacien/gaussien, éventuellement modifier la taille des images),
-# puis d’extraire des features (e.g. texture, corners, edges et SIFT detector).
-# Il faut ensuite réduire les dimensions, soit par des approches classiques
-# (e.g. PCA, k-means) soit avec une approche par histogrammes et dictionary learning
-# (bag-of-words appliqué aux images), puis appliquer des algorithmes de
-# classification standards.
-#
-# Lors de l’analyse exploratoire, vous regarderez si les features extraites
-# et utilisées en classification sont prometteuses en utilisant des
-# méthodes de réduction de dimension pour visualiser le dataset en 2D.
-# Cela vous permettra d’affiner votre intuition sur les différents traitements
-# possibles, sans que cela ne se substitue à des mesures de performances
-# rigoureuses.
-# =============================================================================
-
 import os
-import cv2
 import random
 import warnings
 import numpy as np
@@ -33,12 +14,15 @@ import pandas as pd
 import scipy.ndimage
 from scipy.cluster.vq import whiten
 import matplotlib.pyplot as plt
+from PIL import Image
+from sklearn import svm
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 from sklearn.decomposition import RandomizedPCA
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
-from PIL import Image
+from sklearn.cluster import MiniBatchKMeans
+import cv2
 
 # Pour ne pas avoir les warnings lors de la compilation
 warnings.filterwarnings("ignore")
@@ -47,12 +31,43 @@ warnings.filterwarnings("ignore")
 IMG_DIR = '/home/toni/Bureau/p7/Images/'
 
 # Définitions des limites d'execution
-NB_RACES = 20
-NB_EXEMPLES = 100
+NB_RACES = 5
+NB_EXEMPLES = 200
+NB_CLUSTER = int(NB_RACES * (NB_EXEMPLES/5))
+AFFICHAGE_HISTOGRAMME = False
 
-#setup a standard image size; this will distort images but will get everything into the same shape
-STANDARD_SIZE = (300, 167)
-#STANDARD_SIZE = (500, 375)
+# Setup a standard image size;
+# this will distort images but will get everything into the same shape
+STANDARD_SIZE = (300, 167) #(500, 375)
+
+def gestion_erreur(res, test_y, labels, classifieur):
+    """
+    Gestion de l'erreur quand une catégorie de chien n'est pas prédite
+    On rajoute la colonne vide manuellement
+    """
+
+    # Si ce n'est pas un kmeans, le traitement est différent (noms ou numéros)
+    if classifieur != 'kmeans':
+        for i in np.unique(test_y):
+            if i not in res.columns:
+                res[i] = 0
+
+        for i in res.columns:
+            if i not in res.index:
+                res.loc[i] = 0
+    else:
+        for i in range(0, NB_RACES):
+            if i not in res.columns:
+                res[i] = 0
+
+        for i in np.unique(labels):
+            if i not in res.index:
+                res.loc[i] = 0
+
+    res = res.sort_index(axis=0, ascending=True)
+    res = res.sort_index(axis=1, ascending=True)
+
+    return res
 
 def fonction_median(img, param1):
     """
@@ -100,7 +115,7 @@ def flatten_image(img):
     img_wide = img.reshape(1, shape)
     return img_wide[0]
 
-def recup_images(liste_dossier, num_filtre):
+def recup_images_filtres(liste_images, num_filtre):
     """
     Fonction qui récupére toute les images avec une sélection aléatoire
     Rajout de filtres possibles
@@ -108,73 +123,41 @@ def recup_images(liste_dossier, num_filtre):
 
     # Création des listes vides
     data = []
-    labels = []
-    des_list = []
 
-    # Valeur initiale d'un compteur
-    cpt_race = 0
+    for lien_image in liste_images:
+        # Récupération de la matrice tranformée
+        img = img_to_matrix(lien_image, False)
 
-    #
-    orb = cv2.ORB_create()
+        if num_filtre == 1:
+            # Filtre gaussien
+            img = fonction_gauss(img, 5)
+        elif num_filtre == 2:
+            # Filtre médian
+            img = fonction_median(img, 5)
+        elif num_filtre == 3:
+            img = whiten(img)
 
-    for dirs in liste_dossier:
-        # Valeur initiale d'un compteur
-        cpt_exemple = 0
-        if cpt_race < NB_RACES+1:
-            cpt_race = cpt_race+1
-            for filename in os.listdir(IMG_DIR + dirs):
-                # On ne garde que NB_EXEMPLES exemplaires de chaque race
-                if cpt_exemple < NB_EXEMPLES:
-                    cpt_exemple = cpt_exemple+1
+        # Mise à une dimension
+        img = flatten_image(img)
+        data.append(img)
 
-                    # Affichage pour voir si ça tourne toujours
-                    #if cpt_exemple%25 == 0:
-                    #    print(cpt_exemple, dirs + '/' + filename)
+        del img
 
-                    # Récupération de la matrice tranformée
-                    img = img_to_matrix(IMG_DIR + dirs + '/' + filename, False)
+    return data
 
-                    if num_filtre == 1:
-                        # Filtre gaussien
-                        img = fonction_gauss(img, 5)
-                    elif num_filtre == 2:
-                        # Filtre médian
-                        img = fonction_median(img, 5)
-                    elif num_filtre == 3:
-                        img = whiten(img)
-#                    elif num_filtre == 4:
-#                        image_brute = IMG_DIR + dirs + '/' + filename
-#                        a, b = image_detect_and_compute(orb, image_brute)
-#                        des_list.append((a, b))
-#                        img = b
-
-                    # Mise à une dimension
-                    img = flatten_image(img)
-                    data.append(img)
-
-                    # Rajout du label
-                    labels.append(dirs[dirs.find('-')+1:].lower())
-
-                    del img
-
-#    # Stack all the descriptors vertically in a numpy array
-#    descriptors = des_list[0][1]
-#    for image_path, descriptor in des_list[1:]:
-#        # Stacking the descriptors
-#        descriptors = np.vstack((descriptors, descriptor))
-
-    return data, labels
-
-def image_detect_and_compute(detector, img):
+def features(img, extractor):
     """
     Detect and compute interest points and their descriptors.
     """
 
     img = cv2.imread(img)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    kp, des = detector.detectAndCompute(img, None)
+    img = cv2.resize(img, STANDARD_SIZE)
 
-    return kp, des
+    #img = img.resize(STANDARD_SIZE)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    keypoints, des = extractor.detectAndCompute(img, None)
+
+    return keypoints, des
 
 def calcul_resultats(res, test_y, classifieur):
     """
@@ -207,12 +190,47 @@ def calcul_resultats(res, test_y, classifieur):
 
     print(data_resultats)
 
-def main():
+def fonction_orb(liste_images):
     """
-    Fonction principale
+    Fonction qui extrait les features et permets de les clusterizer
     """
 
+    # Création des listes vides
+    pool_descriptors = []
+
+    #
+    extractor = cv2.ORB_create()
+
+    for lien_image in liste_images:
+        # Récupération de la matrice tranformée
+        keypoints, descriptors = features(lien_image, extractor)
+
+        # Rajout à la liste
+        pool_descriptors.append(descriptors)
+
+    # Mise au bon format
+    pool_descriptors = np.asarray(pool_descriptors)
+    pool_descriptors = np.concatenate(pool_descriptors, axis=0)
+
+    # Clusturisation des descriptors
+    print("Training MiniBatchKMeans")
+    kmeans = MiniBatchKMeans(n_clusters=NB_CLUSTER).fit(pool_descriptors)
+    print("End training MiniBatchKMeans")
+
+    return kmeans
+
+def etablir_liste_chiens():
+    """
+    Création de la liste aléatoire des chiens pour les races selectionnés
+    """
+
+    # Listes
     liste_dossier = []
+    liste_images = []
+    labels = []
+
+    # Valeur initiale d'un compteur
+    cpt_race = 0
 
     # Création de la liste aléatoire des races
     liste_chiens = os.listdir(IMG_DIR)
@@ -221,24 +239,138 @@ def main():
         liste_dossier.append(liste_chiens[nb_alea])
         del liste_chiens[nb_alea]
 
-    ## Différents filtres
-    for filtre in range(0, 4):
-        # FILTRE 0 - AUCUN
-        # FILTRE 1- GAUSSIEN
-        # FILTRE 2 - MEDIAN
-        if filtre == 0:
+    # Création de la liste aléatoire des chiens pour les races selectionnés
+    for dirs in liste_dossier:
+        # Valeur initiale d'un compteur
+        cpt_exemple = 0
+        if cpt_race < NB_RACES+1:
+            cpt_race = cpt_race+1
+            for filename in os.listdir(IMG_DIR + dirs):
+                # On ne garde que NB_EXEMPLES exemplaires de chaque race
+                if cpt_exemple < NB_EXEMPLES:
+                    cpt_exemple = cpt_exemple+1
+
+                    # Chemin complet de l'image
+                    liste_images.append(IMG_DIR + dirs + '/' + filename)
+
+                    # Rajout du label
+                    labels.append(dirs[dirs.find('-')+1:].lower())
+
+    return liste_images, labels
+
+def calculate_centroids_histogram(liste_images, labels, model):
+    """
+    with the k-means model found, this code generates the feature vectors
+    by building an histogram of classified keypoints in the kmeans classifier
+    """
+
+    # Création des listes vides
+    feature_vectors = []
+    class_vectors = []
+
+    # Extracteur de features
+    extractor = cv2.ORB_create() #cv2.xfeatures2d.SIFT_create()
+
+    for lien_image in liste_images:
+        # Récupération de la matrice tranformée
+        keypoints, descriptors = features(lien_image, extractor)
+
+        # classification of all descriptors in the model
+        predict_kmeans = model.predict(descriptors)
+
+        # calculates the histogram
+        hist, bin_edges = np.histogram(predict_kmeans, bins=NB_CLUSTER)
+
+        # Affichage des histogrammes
+        if AFFICHAGE_HISTOGRAMME:
+            plt.hist(hist, bins=len(bin_edges))
+            plt.xlabel('bins')
+            plt.ylabel('valeurs')
+            plt.title('Histogramme')
+            plt.show()
+
+        # histogram is the feature vector
+        feature_vectors.append(hist)
+
+    # Mise sous la bonne forme
+    feature_vectors = np.asarray(feature_vectors)
+    class_vectors = np.asarray(labels)
+
+    # return vectors and classes we want to classify
+    return class_vectors, feature_vectors
+
+def fonction_bovw(liste_images, labels):
+    """
+    Fonction avec la technique bag of visual words
+    """
+
+    print("\nFiltre ORB")
+
+    # Séparation des datasets testing/training
+    train_x, test_x, train_y, test_y = train_test_split(liste_images,
+                                                        labels,
+                                                        test_size=0.25)
+
+    # Entrainement du modèle sur le dataset de training
+    trained_model = fonction_orb(train_x)
+
+    # Extraction des histogrammes
+    [train_class, train_featvec] = calculate_centroids_histogram(train_x,
+                                                                 train_y,
+                                                                 trained_model)
+    [test_class, test_featvec] = calculate_centroids_histogram(test_x,
+                                                               test_y,
+                                                               trained_model)
+
+    # Utilisation des vecteurs de training pour entrainer le classifieur
+    clf = svm.SVC()
+    clf.fit(train_featvec, train_class)
+    predict = clf.predict(test_featvec)
+
+    # Calcul des résultats
+    res = pd.crosstab(np.asarray(test_class),
+                      predict,
+                      rownames=["Actual"],
+                      colnames=["Predicted"])
+
+    # Gestion d'une erreur
+    if len(res.columns) != NB_RACES:
+        res = gestion_erreur(res, test_y, labels, 'svm')
+    calcul_resultats(res, test_y, 'svm')
+
+    # Test avec KNN()
+    knn = KNeighborsClassifier(n_neighbors=50)
+    knn.fit(train_featvec, train_class)
+    predict = knn.predict(test_featvec)
+
+    # Calcul des résultats
+    res = pd.crosstab(np.asarray(test_class),
+                      predict,
+                      rownames=["Actual"],
+                      colnames=["Predicted"])
+
+    # Gestion d'une erreur
+    if len(res.columns) != NB_RACES:
+        res = gestion_erreur(res, test_y, labels, 'knn')
+    calcul_resultats(res, test_y, 'knn')
+
+def fonction_filtres(liste_images, labels):
+    """
+    Fonction avec filtres traditionnels
+    """
+
+    for num_filtre in range(0, 4):
+        if num_filtre == 0:
             nom_filtre = "Aucun"
-        elif filtre == 1:
+        elif num_filtre == 1:
             nom_filtre = "Gaussien"
-        elif filtre == 2:
+        elif num_filtre == 2:
             nom_filtre = "Median"
-        elif filtre == 3:
+        elif num_filtre == 3:
             nom_filtre = "Whitening"
-        elif filtre == 4:
-            nom_filtre = "ORB"
 
         print("\nFiltre", nom_filtre)
-        data, labels = recup_images(liste_dossier, filtre)
+        data = recup_images_filtres(liste_images, num_filtre)
 
         ## Réduction de dimension
         # PCA
@@ -251,7 +383,9 @@ def main():
         #data = TSNE(n_components=2).fit_transform(data, labels)
 
         # Séparation des datasets testing/training
-        train_x, test_x, train_y, test_y = train_test_split(data, labels, test_size=0.25)
+        train_x, test_x, train_y, test_y = train_test_split(data,
+                                                            labels,
+                                                            test_size=0.25)
 
         # Transformation en array
         test_y = np.array(test_y)
@@ -261,7 +395,11 @@ def main():
         # Test avec KNN
         knn = KNeighborsClassifier(n_neighbors=10)
         knn.fit(train_x, train_y)
-        res = pd.crosstab(test_y, knn.predict(test_x))
+        res = pd.crosstab(test_y,
+                          knn.predict(test_x),
+                          rownames=["Actual"],
+                          colnames=["Predicted"])
+
         # Gestion d'une erreur
         if len(res.columns) != NB_RACES:
             res = gestion_erreur(res, test_y, '0', 'knn')
@@ -269,39 +407,31 @@ def main():
 
         # Test avec Kmeans
         kmeans = KMeans(n_clusters=NB_RACES).fit(train_x, train_y)
-        res = pd.crosstab(test_y, kmeans.predict(test_x))
+        res = pd.crosstab(test_y,
+                          kmeans.predict(test_x),
+                          rownames=["Actual"],
+                          colnames=["Predicted"])
+
         # Gestion d'une erreur
         if len(res.columns) != NB_RACES:
             res = gestion_erreur(res, test_y, labels, 'kmeans')
         calcul_resultats(res, test_y, 'kmeans')
 
-def gestion_erreur(res, test_y, labels, classifieur):
+def main(choix):
     """
-    Gestion de l'erreur quand une catégorie de chien n'est pas prédite
-    On rajoute la colonne vide manuellement
+    Fonction principale
     """
 
-    if classifieur is not 'kmeans':
-        for i in np.unique(test_y):
-            if i not in res.columns:
-                res[i] = 0
+    # Etablir la liste des chiens
+    liste_images, labels = etablir_liste_chiens()
 
-        for i in res.columns:
-            if i not in res.index:
-                res.loc[i] = 0
+    if choix == 0:
+        fonction_filtres(liste_images, labels)
+    elif choix == 1:
+        fonction_bovw(liste_images, labels)
     else:
-        for i in range(0, NB_RACES):
-            if i not in res.columns:
-                res[i] = 0
-
-        for i in np.unique(labels):
-            if i not in res.index:
-                res.loc[i] = 0
-
-    res = res.sort_index(axis=0, ascending=True)
-    res = res.sort_index(axis=1, ascending=True)
-
-    return res
+        fonction_filtres(liste_images, labels)
+        fonction_bovw(liste_images, labels)
 
 #-----
 #    # Création du dataframe vide
