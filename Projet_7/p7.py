@@ -177,6 +177,7 @@ def calcul_resultats(res, test_y, classifieur):
 
     # Affichage des résultats
     print("Resultat :", round(100*res1.diagonal().sum()/len(test_y), 2), "%")
+    print("No d'erreurs =", len(test_y) - res1.diagonal().sum(), "/", len(test_y))
 
     for i in range(0, len(res)):
         diagonale = res1.diagonal()[i]
@@ -377,7 +378,7 @@ def fonction_filtres(liste_images, labels):
         pca = RandomizedPCA(n_components=10)
         data = pca.fit_transform(data)
         # Explication de la variance
-        print(pca.explained_variance_ratio_.sum())
+        #print(pca.explained_variance_ratio_.sum())
 
         # t-SNE
         #data = TSNE(n_components=2).fit_transform(data, labels)
