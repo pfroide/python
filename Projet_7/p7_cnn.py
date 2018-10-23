@@ -7,23 +7,16 @@ Created on Mon Oct 19 22:19:42 2018
 """
 import os
 import random
-import keras
-import tensorflow as tf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from keras import models
-from keras import layers
-from keras import optimizers
-from keras.applications.vgg16 import VGG16
-from keras.applications.vgg16 import decode_predictions
-from keras.preprocessing.image import load_img, img_to_array
-from keras.applications.vgg16 import preprocess_input
-from keras.layers import Dense
 from sklearn.model_selection import train_test_split
-from keras.models import Sequential, Model
+import keras
+from keras.applications.vgg16 import VGG16
+from keras.layers import Dense
+from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D
-from keras.layers import Activation, Dropout, Flatten, Dense
+from keras.layers import Dropout, Flatten
 
 # Lieu où se trouvent des images
 IMG_DIR = '/home/toni/Bureau/p7/flow/'
@@ -31,6 +24,7 @@ IMG_DIR = '/home/toni/Bureau/p7/flow/'
 # Définitions des limites d'execution
 NB_RACES = 3
 NB_EXEMPLES = 300
+BATCH_SIZE = 32
 
 def calcul_resultats(res, test_y, classifieur):
     """
@@ -63,7 +57,7 @@ def calcul_resultats(res, test_y, classifieur):
 
     print(data_resultats)
 
-def appel_vgg(train_feats, test_feats, train_labels, validation_labels, batch_size):
+def appel_vgg(train_feats, test_feats, train_labels, validation_labels):
     """
     Fonction de transfert learning
     """
@@ -83,12 +77,12 @@ def appel_vgg(train_feats, test_feats, train_labels, validation_labels, batch_si
 
     # 4 - Full Connection
     model.add(Dense(256, activation='relu'))
-    model.add(Dropout(0.5))
+    model.add(Dropout(0.25))
     model.add(Dense(NB_RACES, activation='sigmoid'))
 
     # 5 - Compilation
     model.compile(optimizer='adam',
-                  loss='categorical_crossentropy',
+                  loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
 
 #    model.compile(optimizer=optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=None, decay=0.0),
@@ -101,20 +95,16 @@ def appel_vgg(train_feats, test_feats, train_labels, validation_labels, batch_si
 
     # 6 - Fit
     history = model.fit(train_feats, train_labels,
-              epochs=100,
-              batch_size=batch_size,
-              validation_data=(test_feats, validation_labels))
-
-    #history = model.fit_generator(generator=features_train,
-    #                              validation_data=features_test,
-    #                              epochs=10)
+                        epochs=50,
+                        batch_size=BATCH_SIZE,
+                        validation_data=(test_feats, validation_labels))
 
     # Tracé de courbes pour visualiser les résultats
     courbes(history)
 
     return model
 
-def recup_features(liste_train, liste_test, batch_size):
+def recup_features(liste_train, liste_test):
     """
     Récupération des features
     """
@@ -125,19 +115,19 @@ def recup_features(liste_train, liste_test, batch_size):
     # Extract Features
     vgg = VGG16(weights="imagenet", include_top=False, input_shape=input_shape)
 
-    # Sans data augmentation
-    datagen = keras.preprocessing.image.ImageDataGenerator(rescale=1./255,
-                                                           horizontal_flip=True)
+#    # Sans data augmentation
+#    datagen = keras.preprocessing.image.ImageDataGenerator(rescale=1./255,
+#                                                           horizontal_flip=True)
 
     # avec data augmentation
-#    datagen = keras.preprocessing.image.ImageDataGenerator(rotation_range=40,
-#                                                           rescale=1./255,
-#                                                           #width_shift_range=0.2,
-#                                                           #height_shift_range=0.2,
-#                                                           #shear_range=0.2,
-#                                                           #zoom_range=0.2,
-#                                                           #horizontal_flip=True,
-#                                                           fill_mode='nearest')
+    datagen = keras.preprocessing.image.ImageDataGenerator(rotation_range=40,
+                                                           rescale=1./255,
+                                                           width_shift_range=0.2,
+                                                           height_shift_range=0.2,
+                                                           shear_range=0.2,
+                                                           zoom_range=0.2,
+                                                           horizontal_flip=True,
+                                                           fill_mode='nearest')
 
     # Training
     train_generator = datagen.flow_from_dataframe(dataframe=liste_train,
@@ -146,48 +136,26 @@ def recup_features(liste_train, liste_test, batch_size):
                                                   y_col='labels',
                                                   has_ext=True,
                                                   target_size=(224, 224),
-                                                  batch_size=batch_size,
-                                                  class_mode='categorical')
-
-    # Préparation de la liste des labels de train
-    nImagesTrain = len(train_generator.classes)
-    train_labels = np.zeros(shape=(nImagesTrain, NB_RACES))
+                                                  batch_size=BATCH_SIZE,
+                                                  class_mode='sparse')
 
     # Récupération des features
     vgg_features_train = vgg.predict_generator(train_generator)
-
-    i = 0
-    for inputs_batch, labels_batch in train_generator:
-        train_labels[i * batch_size : (i + 1) * batch_size] = labels_batch
-        i += 1
-        if i * batch_size >= nImagesTrain:
-            break
+    train_labels = train_generator.classes
 
     # Testing
     test_generator = datagen.flow_from_dataframe(dataframe=liste_test,
-                                                           directory=IMG_DIR,
-                                                           x_col='liste',
-                                                           y_col='labels',
-                                                           has_ext=True,
-                                                           target_size=(224, 224),
-                                                           batch_size=batch_size,
-                                                           class_mode='categorical')
-
-    # Préparation de la liste des labels de train
-    nImagesTest = len(test_generator.classes)
-    validation_labels = np.zeros(shape=(nImagesTest, NB_RACES))
+                                                 directory=IMG_DIR,
+                                                 x_col='liste',
+                                                 y_col='labels',
+                                                 has_ext=True,
+                                                 target_size=(224, 224),
+                                                 batch_size=BATCH_SIZE,
+                                                 class_mode='sparse')
 
     # Récupération des features
     vgg_features_test = vgg.predict_generator(test_generator)
-
-    i = 0
-    for inputs_batch, labels_batch in test_generator:
-#        features_batch = vgg.predict(inputs_batch)
-#        validation_features[i * batch_size : (i + 1) * batch_size] = features_batch
-        validation_labels[i * batch_size : (i + 1) * batch_size] = labels_batch
-        i += 1
-        if i * batch_size >= nImagesTest:
-            break
+    validation_labels = test_generator.classes
 
     return vgg_features_train, vgg_features_test, train_labels, validation_labels, test_generator
 
@@ -210,25 +178,21 @@ def main():
     liste_train = liste_train.reset_index(drop="True")
     liste_test = liste_test.reset_index(drop="True")
 
-    # Variable
-    batch_size = 32
-
     # Récupération des features
     train_feats, test_feats, train_labels, test_labels, test_generator = recup_features(liste_train,
-                                                                                        liste_test,
-                                                                                        batch_size)
+                                                                                        liste_test)
 
     # Appel de la fonction de transfer learning
     model = appel_vgg(train_feats,
                       test_feats,
                       train_labels,
-                      test_labels,
-                      batch_size)
+                      test_labels)
 
     # Calcul des résultats
     predictions = model.predict_classes(test_feats)
+    truth = test_generator.classes
 
-    res = pd.crosstab(np.asarray(predictions),
+    res = pd.crosstab(np.asarray(truth),
                       predictions,
                       rownames=["Actual"],
                       colnames=["Predicted"])
@@ -238,7 +202,7 @@ def main():
         res = gestion_erreur(res, predictions, liste_train['labels'], 'cnn')
     calcul_resultats(res, np.asarray(predictions), 'cnn')
 
-    errors = np.where(predictions != predictions)[0]
+    errors = np.where(predictions != truth)[0]
     print("No of errors =", len(errors), "/", len(liste_test))
 
 #    # Visualisation des images mal labelisées
@@ -272,22 +236,22 @@ def courbes(resultat):
     """
 
     # Loss Curves
-    plt.figure(figsize=[8,6])
-    plt.plot(resultat.history['loss'],'r',linewidth=3.0)
-    plt.plot(resultat.history['val_loss'],'b',linewidth=3.0)
-    plt.legend(['Training loss', 'Validation Loss'],fontsize=18)
-    plt.xlabel('Epochs ',fontsize=16)
-    plt.ylabel('Loss',fontsize=16)
-    plt.title('Loss Curves',fontsize=16)
+    plt.figure(figsize=[8, 6])
+    plt.plot(resultat.history['loss'], 'r', linewidth=3.0)
+    plt.plot(resultat.history['val_loss'], 'b', linewidth=3.0)
+    plt.legend(['Training loss', 'Validation Loss'], fontsize=18)
+    plt.xlabel('Epochs ', fontsize=16)
+    plt.ylabel('Loss', fontsize=16)
+    plt.title('Loss Curves', fontsize=16)
 
     # Accuracy Curves
-    plt.figure(figsize=[8,6])
-    plt.plot(resultat.history['acc'],'r',linewidth=3.0)
-    plt.plot(resultat.history['val_acc'],'b',linewidth=3.0)
-    plt.legend(['Training Accuracy', 'Validation Accuracy'],fontsize=18)
-    plt.xlabel('Epochs ',fontsize=16)
-    plt.ylabel('Accuracy',fontsize=16)
-    plt.title('Accuracy Curves',fontsize=16)
+    plt.figure(figsize=[8, 6])
+    plt.plot(resultat.history['acc'], 'r', linewidth=3.0)
+    plt.plot(resultat.history['val_acc'], 'b', linewidth=3.0)
+    plt.legend(['Training Accuracy', 'Validation Accuracy'], fontsize=18)
+    plt.xlabel('Epochs ', fontsize=16)
+    plt.ylabel('Accuracy', fontsize=16)
+    plt.title('Accuracy Curves', fontsize=16)
 
 def gestion_erreur(res, test_y, labels, classifieur):
     """
