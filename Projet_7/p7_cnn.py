@@ -21,19 +21,16 @@ from keras.preprocessing.image import load_img, img_to_array
 from keras.applications.vgg16 import preprocess_input
 from keras.layers import Dense
 from sklearn.model_selection import train_test_split
-from keras.models import Sequential
+from keras.models import Sequential, Model
 from keras.layers import Conv2D, MaxPooling2D
 from keras.layers import Activation, Dropout, Flatten, Dense
 
 # Lieu où se trouvent des images
 IMG_DIR = '/home/toni/Bureau/p7/flow/'
-IMG_DIR_TRAIN = '/home/toni/Bureau/p7/flow/train/'
-IMG_DIR_TEST = '/home/toni/Bureau/p7/flow/test/'
 
 # Définitions des limites d'execution
-NB_RACES = 25
+NB_RACES = 3
 NB_EXEMPLES = 300
-NB_CLUSTER = int(NB_RACES * (NB_EXEMPLES/5))
 
 def calcul_resultats(res, test_y, classifieur):
     """
@@ -66,46 +63,71 @@ def calcul_resultats(res, test_y, classifieur):
 
     print(data_resultats)
 
-def main():
+def appel_vgg(train_feats, test_feats, train_labels, validation_labels, batch_size):
     """
-    TBD
+    Fonction de transfert learning
     """
 
-    from keras.models import Model
+    # Initialisation du CNN
+    model = Sequential()
 
-    etablir_liste_chiens()
+    # 1 - Convolution
+    # this applies 32 convolution filters of size 3x3 each.
+    model.add(Conv2D(32, (3, 3), input_shape=(7, 7, 512), activation='relu'))
 
-    #liste_images.to_csv('/home/toni/Bureau/liste.csv')
-    liste_images = pd.read_csv('/home/toni/Bureau/liste.csv')
-    del liste_images['Unnamed: 0']
+    # 2 - Pooling
+    model.add(MaxPooling2D(pool_size=(2, 2)))
 
-    # Séparation des datasets testing/training
-    liste_train, liste_test = train_test_split(liste_images,
-                                               test_size=0.2)
+    # 3 - Flattening
+    model.add(Flatten())
 
-    liste_train = liste_train.reset_index(drop="True")
-    liste_test = liste_test.reset_index(drop="True")
+    # 4 - Full Connection
+    model.add(Dense(256, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(NB_RACES, activation='sigmoid'))
 
-    batch_size = 32
+    # 5 - Compilation
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+
+#    model.compile(optimizer=optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=None, decay=0.0),
+#                  loss='categorical_crossentropy',
+#                  metrics=['acc'])
+
+#    model.compile(optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
+#                  loss="categorical_crossentropy",
+#                  metrics=["accuracy"])
+
+    # 6 - Fit
+    history = model.fit(train_feats, train_labels,
+              epochs=100,
+              batch_size=batch_size,
+              validation_data=(test_feats, validation_labels))
+
+    #history = model.fit_generator(generator=features_train,
+    #                              validation_data=features_test,
+    #                              epochs=10)
+
+    # Tracé de courbes pour visualiser les résultats
+    courbes(history)
+
+    return model
+
+def recup_features(liste_train, liste_test, batch_size):
+    """
+    Récupération des features
+    """
+
+    # Shape des images
     input_shape = (224, 224, 3)
 
     # Extract Features
-    vgg = VGG16(weights="imagenet", include_top=False, input_shape=(224, 224, 3))
-
-#    # Récupérer la sortie de ce réseau
-#    x = vgg.output
-
-#    # Ajouter la nouvelle couche fully-connected pour la classification à 10 classes
-#    predictions = Dense(NB_RACES, activation='softmax')(x)
-
-#    # Définir le nouveau modèle
-#    new_model = Model(inputs=vgg.input, outputs=predictions)
-
-#    for layer in new_model.layers:
-#        layer.trainable = False
+    vgg = VGG16(weights="imagenet", include_top=False, input_shape=input_shape)
 
     # Sans data augmentation
-    datagen = keras.preprocessing.image.ImageDataGenerator(rescale=1./255)
+    datagen = keras.preprocessing.image.ImageDataGenerator(rescale=1./255,
+                                                           horizontal_flip=True)
 
     # avec data augmentation
 #    datagen = keras.preprocessing.image.ImageDataGenerator(rotation_range=40,
@@ -127,112 +149,86 @@ def main():
                                                   batch_size=batch_size,
                                                   class_mode='categorical')
 
+    # Préparation de la liste des labels de train
     nImagesTrain = len(train_generator.classes)
-
-    # Training
-    train_features = np.zeros(shape=(nImagesTrain, 7, 7, 512))
     train_labels = np.zeros(shape=(nImagesTrain, NB_RACES))
+
+    # Récupération des features
+    vgg_features_train = vgg.predict_generator(train_generator)
 
     i = 0
     for inputs_batch, labels_batch in train_generator:
-        features_batch = vgg.predict(inputs_batch)
-        train_features[i * batch_size : (i + 1) * batch_size] = features_batch
         train_labels[i * batch_size : (i + 1) * batch_size] = labels_batch
         i += 1
         if i * batch_size >= nImagesTrain:
             break
 
-    train_features = np.reshape(train_features, (nImagesTrain, 7 * 7 * 512))
-
     # Testing
-    validation_generator = datagen.flow_from_dataframe(dataframe=liste_test,
-                                                       directory=IMG_DIR,
-                                                       x_col='liste',
-                                                       y_col='labels',
-                                                       has_ext=True,
-                                                       target_size=(224, 224),
-                                                       batch_size=batch_size,
-                                                       class_mode='categorical')
+    test_generator = datagen.flow_from_dataframe(dataframe=liste_test,
+                                                           directory=IMG_DIR,
+                                                           x_col='liste',
+                                                           y_col='labels',
+                                                           has_ext=True,
+                                                           target_size=(224, 224),
+                                                           batch_size=batch_size,
+                                                           class_mode='categorical')
 
-    nImagesTest = len(validation_generator.classes)
-
-    validation_features = np.zeros(shape=(nImagesTest, 7, 7, 512))
+    # Préparation de la liste des labels de train
+    nImagesTest = len(test_generator.classes)
     validation_labels = np.zeros(shape=(nImagesTest, NB_RACES))
 
+    # Récupération des features
+    vgg_features_test = vgg.predict_generator(test_generator)
+
     i = 0
-    for inputs_batch, labels_batch in validation_generator:
-        features_batch = vgg.predict(inputs_batch)
-        validation_features[i * batch_size : (i + 1) * batch_size] = features_batch
+    for inputs_batch, labels_batch in test_generator:
+#        features_batch = vgg.predict(inputs_batch)
+#        validation_features[i * batch_size : (i + 1) * batch_size] = features_batch
         validation_labels[i * batch_size : (i + 1) * batch_size] = labels_batch
         i += 1
         if i * batch_size >= nImagesTest:
             break
 
-    validation_features = np.reshape(validation_features, (nImagesTest, 7 * 7 * 512))
+    return vgg_features_train, vgg_features_test, train_labels, validation_labels, test_generator
 
-    # Initialisation du CNN
-    model = Sequential()
+def main():
+    """
+    TBD
+    """
 
-    # 1 - Convolution
-    # this applies 32 convolution filters of size 3x3 each.
-    model.add(Conv2D(32, (3, 3), input_shape=input_shape, activation='relu'))
+    # Etablissement du dataset de manière aléatoire
+    etablir_liste_chiens()
 
-    # 2 - Pooling
-    model.add(MaxPooling2D(pool_size=(2,2)))
+    #liste_images.to_csv('/home/toni/Bureau/liste.csv')
+    liste_images = pd.read_csv('/home/toni/Bureau/liste.csv')
+    del liste_images['Unnamed: 0']
 
-    model.add(Conv2D(32, (3, 3)))
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    # Séparation des datasets testing/training
+    liste_train, liste_test = train_test_split(liste_images,
+                                               test_size=0.2)
 
-    model.add(Conv2D(64, (3, 3)))
-    model.add(Activation('relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    liste_train = liste_train.reset_index(drop="True")
+    liste_test = liste_test.reset_index(drop="True")
 
-    # 3 - Flattening
-    model.add(Flatten())
+    # Variable
+    batch_size = 32
 
-    # 4 - Full Connection
-    model.add(Dense(activation='relu', units=128))
-    model.add(Dense(activation='relu', units=NB_RACES))
+    # Récupération des features
+    train_feats, test_feats, train_labels, test_labels, test_generator = recup_features(liste_train,
+                                                                                        liste_test,
+                                                                                        batch_size)
 
-    # 5 - Compilation
-#    model.compile(optimizer='adam',
-#                  loss='categorical_crossentropy',
-#                  metrics=['accuracy'])
-
-#    model.compile(optimizer=optimizers.RMSprop(lr=2e-4),
-#                  loss='categorical_crossentropy',
-#                  metrics=['acc'])
-
-    model.compile(optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
-                  loss="categorical_crossentropy",
-                  metrics=["accuracy"])
-
-    # 6 - Fit
-    # Train the model
-    # Training a network in Keras is as simple as calling model.fit() function
-    # as we have seen in our earlier tutorials.
-    resultat = model.fit_generator(train_generator,
-                                   epochs=20,
-                                   verbose=1,
-                                   validation_data=validation_generator)
-
-    score = model.evaluate(validation_features, validation_labels, batch_size=32)
-
-    # Check Performance
-    # We would like to visualize which images were wrongly classified.
-    fnames = validation_generator.filenames
-    ground_truth = validation_generator.classes
-    label2index = validation_generator.class_indices
-
-    # Getting the mapping from class index to class label
-    idx2label = dict((v, k) for k, v in label2index.items())
-
-    predictions = model.predict_classes(validation_features)
-    prob = model.predict(validation_features)
+    # Appel de la fonction de transfer learning
+    model = appel_vgg(train_feats,
+                      test_feats,
+                      train_labels,
+                      test_labels,
+                      batch_size)
 
     # Calcul des résultats
-    res = pd.crosstab(np.asarray(ground_truth),
+    predictions = model.predict_classes(test_feats)
+
+    res = pd.crosstab(np.asarray(predictions),
                       predictions,
                       rownames=["Actual"],
                       colnames=["Predicted"])
@@ -240,26 +236,37 @@ def main():
     # Gestion d'une erreur
     if len(res.columns) != NB_RACES:
         res = gestion_erreur(res, predictions, liste_train['labels'], 'cnn')
-    calcul_resultats(res, np.asarray(ground_truth), 'cnn')
+    calcul_resultats(res, np.asarray(predictions), 'cnn')
 
-    errors = np.where(predictions != ground_truth)[0]
+    errors = np.where(predictions != predictions)[0]
     print("No of errors =", len(errors), "/", len(liste_test))
 
-    # Let us see which images were predicted wrongly
-    for i in range(len(errors)):
-        pred_class = np.argmax(prob[errors[i]])
-        pred_label = idx2label[pred_class]
+#    # Visualisation des images mal labelisées
+#    # Check Performance
+#    fnames = test_generator.filenames
+#    label2index = test_generator.class_indices
+#    prob = model.predict(test_feats)
+#
+#    # Getting the mapping from class index to class label
+#    idx2label = dict((v, k) for k, v in label2index.items())
+#
+#    for i in range(len(errors)):
+#        pred_class = np.argmax(prob[errors[i]])
+#        pred_label = idx2label[pred_class]
+#
+#        label_initial = np.argmax(test_labels[errors[i]])
+#        label_initial = idx2label[label_initial]
+#
+#        print('Original label:{}, Prediction :{}, confidence : {:.3f}'.format(
+#            label_initial,
+#            pred_label,
+#            prob[errors[i]][pred_class]))
+#
+#        original = load_img('{}/{}'.format(IMG_DIR, fnames[errors[i]]))
+#        plt.imshow(original)
+#        plt.show()
 
-        print('Original label:{}, Prediction :{}, confidence : {:.3f}'.format(
-            fnames[errors[i]].split('/')[0],
-            pred_label,
-            prob[errors[i]][pred_class]))
-
-        original = load_img('{}/{}'.format(IMG_DIR_TEST, fnames[errors[i]]))
-        plt.imshow(original)
-        plt.show()
-
-def courbes():
+def courbes(resultat):
     """
     TBD
     """
