@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import scipy.ndimage
 from scipy.cluster.vq import whiten
+import matplotlib
 import matplotlib.pyplot as plt
 from PIL import Image
 from sklearn import svm
@@ -34,7 +35,7 @@ IMG_DIR = '/home/toni/Bureau/p7/Images/'
 NB_RACES = 5
 NB_EXEMPLES = 200
 NB_CLUSTER = int(NB_RACES * (NB_EXEMPLES/5))
-AFFICHAGE_HISTOGRAMME = False
+AFFICHAGE_HISTOGRAMME = True
 
 # Setup a standard image size;
 # this will distort images but will get everything into the same shape
@@ -268,6 +269,7 @@ def calculate_centroids_histogram(liste_images, labels, model):
     # Création des listes vides
     feature_vectors = []
     class_vectors = []
+    compteur = 0
 
     # Extracteur de features
     extractor = cv2.ORB_create() #cv2.xfeatures2d.SIFT_create()
@@ -283,8 +285,9 @@ def calculate_centroids_histogram(liste_images, labels, model):
         hist, bin_edges = np.histogram(predict_kmeans, bins=NB_CLUSTER)
 
         # Affichage des histogrammes
-        if AFFICHAGE_HISTOGRAMME:
-            plt.hist(hist, bins=len(bin_edges))
+        if AFFICHAGE_HISTOGRAMME and compteur < 6:
+            compteur = compteur + 1
+            plt.hist(hist, bins=len(bin_edges), align='mid')
             plt.xlabel('bins')
             plt.ylabel('valeurs')
             plt.title('Histogramme')
@@ -375,13 +378,16 @@ def fonction_filtres(liste_images, labels):
 
         ## Réduction de dimension
         # PCA
-        pca = RandomizedPCA(n_components=10)
+        pca = RandomizedPCA(n_components=2)
         data = pca.fit_transform(data)
         # Explication de la variance
-        #print(pca.explained_variance_ratio_.sum())
+        #print(pca.explained_variance_ratio_)
 
         # t-SNE
         #data = TSNE(n_components=2).fit_transform(data, labels)
+
+        # Affichage en 2D après une décomposition
+        affichage_decomposition(data, labels)
 
         # Séparation des datasets testing/training
         train_x, test_x, train_y, test_y = train_test_split(data,
@@ -417,6 +423,45 @@ def fonction_filtres(liste_images, labels):
         if len(res.columns) != NB_RACES:
             res = gestion_erreur(res, test_y, labels, 'kmeans')
         calcul_resultats(res, test_y, 'kmeans')
+
+def affichage_decomposition(data, labels):
+    """
+    Affichage en 2D de la décomposition"
+    """
+
+    principaldf = pd.DataFrame(data=data,
+                             columns=['principal component 1',
+                                      'principal component 2'])
+
+    finaldf = pd.concat([principaldf, pd.DataFrame(labels)], axis=1)
+
+    data_labels = pd.DataFrame(labels)
+    targets = []
+
+    # Création de la liste des labels
+    for i in data_labels[0].unique():
+        targets.append(i)
+
+    fig = plt.figure(figsize=(8, 8))
+    axe = fig.add_subplot(1, 1, 1)
+    axe.set_xlabel('Principal Component 1', fontsize=15)
+    axe.set_ylabel('Principal Component 2', fontsize=15)
+    axe.set_title('PCA components', fontsize=20)
+
+    # Création de la liste des couleurs
+    colors = matplotlib.cm.rainbow(np.linspace(0, 1, len(targets)))
+
+    # Affichage par catégorie
+    for target, color in zip(targets, colors):
+        indices_to_keep = finaldf[0] == target
+        axe.scatter(finaldf.loc[indices_to_keep, 'principal component 1'],
+                    finaldf.loc[indices_to_keep, 'principal component 2'],
+                    c=color,
+                    s=50)
+
+    axe.legend(targets)
+    axe.grid()
+    plt.show()
 
 def main(choix):
     """
