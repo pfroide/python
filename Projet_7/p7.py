@@ -236,6 +236,7 @@ def etablir_liste_chiens():
 
     # Création de la liste aléatoire des races
     liste_chiens = os.listdir(IMG_DIR)
+
     for i in range(0, NB_RACES):
         nb_alea = random.randrange(0, len(liste_chiens))
         liste_dossier.append(liste_chiens[nb_alea])
