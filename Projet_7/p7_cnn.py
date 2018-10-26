@@ -15,6 +15,7 @@ import keras
 from keras.layers import Dense, Flatten
 from keras.models import Model
 from keras.applications.vgg19 import VGG19
+from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 import cv2
@@ -103,7 +104,7 @@ def cnn_data_augmentation(model, liste_train, liste_test):
 
     return hist
 
-def cnn_appel_vgg(x_train, y_train, x_valid, y_valid,liste_train, liste_test):
+def cnn_appel_vgg(x_train, y_train, x_valid, y_valid, liste_train, liste_test):
     """
     Fonction de transfert learning
     """
@@ -145,6 +146,9 @@ def cnn_appel_vgg(x_train, y_train, x_valid, y_valid,liste_train, liste_test):
                         epochs=25,
                         validation_data=(x_valid, y_valid),
                         verbose=1)
+
+        # Dump (sauvegarde)
+        joblib.dump(res, IMG_DIR + 'savefit.pkl')
 
     # Tracé de courbes pour visualiser les résultats
     cnn_courbes(res)
