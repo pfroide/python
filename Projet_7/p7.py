@@ -36,6 +36,7 @@ NB_RACES = 5
 NB_EXEMPLES = 200
 NB_CLUSTER = int(NB_RACES * (NB_EXEMPLES/5))
 AFFICHAGE_HISTOGRAMME = True
+RESULTATS = pd.DataFrame()
 
 # Setup a standard image size;
 # this will distort images but will get everything into the same shape
@@ -160,10 +161,12 @@ def features(img, extractor):
 
     return keypoints, des
 
-def calcul_resultats(res, test_y, classifieur):
+def calcul_resultats(res, test_y, classifieur, nom_filtre):
     """
     Fonction qui va calculer les pourcentages de bons pronostics
     """
+
+    global RESULTATS
 
     print("\nResultats pour", classifieur)
 
@@ -189,6 +192,14 @@ def calcul_resultats(res, test_y, classifieur):
         data_resultats.loc[res.index[i], 'pc_total'] = round(100*diagonale/res.sum('columns')[i], 2)
 
     data_resultats = data_resultats.fillna(0)
+
+    temp = []
+    temp.append([classifieur,
+                 nom_filtre,
+                 data_resultats['pc_prono'].mean(),
+                 data_resultats['pc_total'].mean()])
+
+    RESULTATS = RESULTATS.append(temp)
 
     print(data_resultats)
 
@@ -341,7 +352,7 @@ def fonction_bovw(liste_images, labels):
     # Gestion d'une erreur
     if len(res.columns) != NB_RACES:
         res = gestion_erreur(res, test_y, labels, 'svm')
-    calcul_resultats(res, test_y, 'svm')
+    calcul_resultats(res, test_y, 'svm', 'orb')
 
     # Test avec KNN()
     knn = KNeighborsClassifier(n_neighbors=50)
@@ -357,7 +368,7 @@ def fonction_bovw(liste_images, labels):
     # Gestion d'une erreur
     if len(res.columns) != NB_RACES:
         res = gestion_erreur(res, test_y, labels, 'knn')
-    calcul_resultats(res, test_y, 'knn')
+    calcul_resultats(res, test_y, 'knn', 'orb')
 
 def fonction_filtres(liste_images, labels):
     """
@@ -411,7 +422,7 @@ def fonction_filtres(liste_images, labels):
         # Gestion d'une erreur
         if len(res.columns) != NB_RACES:
             res = gestion_erreur(res, test_y, '0', 'knn')
-        calcul_resultats(res, test_y, 'knn')
+        calcul_resultats(res, test_y, 'knn', nom_filtre)
 
         # Test avec Kmeans
         kmeans = KMeans(n_clusters=NB_RACES).fit(train_x, train_y)
@@ -423,7 +434,7 @@ def fonction_filtres(liste_images, labels):
         # Gestion d'une erreur
         if len(res.columns) != NB_RACES:
             res = gestion_erreur(res, test_y, labels, 'kmeans')
-        calcul_resultats(res, test_y, 'kmeans')
+        calcul_resultats(res, test_y, 'kmeans', nom_filtre)
 
 def affichage_decomposition(data, labels):
     """
@@ -431,8 +442,8 @@ def affichage_decomposition(data, labels):
     """
 
     principaldf = pd.DataFrame(data=data,
-                             columns=['principal component 1',
-                                      'principal component 2'])
+                               columns=['principal component 1',
+                                        'principal component 2'])
 
     finaldf = pd.concat([principaldf, pd.DataFrame(labels)], axis=1)
 
@@ -480,6 +491,9 @@ def main(choix):
         fonction_filtres(liste_images, labels)
         fonction_bovw(liste_images, labels)
 
+    RESULTATS.columns= ["nom", "nom2", "% prono", "% total"]
+
+    print(RESULTATS)
 #-----
 #    # Création du dataframe vide
 #    spec_images = pd.DataFrame()
