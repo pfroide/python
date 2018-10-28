@@ -30,6 +30,7 @@ warnings.filterwarnings("ignore")
 
 # Lieu où se trouvent des images
 IMG_DIR = '/home/toni/Bureau/p7/Images/'
+DOSSIER_SAVE = '/home/toni/python/python/Projet_7/images/'
 
 # Définitions des limites d'execution
 NB_RACES = 5
@@ -38,9 +39,8 @@ NB_CLUSTER = int(NB_RACES * (NB_EXEMPLES/5))
 AFFICHAGE_HISTOGRAMME = True
 RESULTATS = pd.DataFrame()
 
-# Setup a standard image size;
-# this will distort images but will get everything into the same shape
-STANDARD_SIZE = (300, 167) #(500, 375)
+# Setup a standard image size
+STANDARD_SIZE = (224, 224) #(300, 167)
 
 def gestion_erreur(res, test_y, labels, classifieur):
     """
@@ -103,7 +103,6 @@ def img_to_matrix(filename, verbose=False):
 
     img = img.resize(STANDARD_SIZE)
     img = list(img.getdata())
-    #img = map(list, img)
     img = np.array(img)
     return img
 
@@ -303,6 +302,8 @@ def calculate_centroids_histogram(liste_images, labels, model):
             plt.xlabel('bins')
             plt.ylabel('valeurs')
             plt.title('Histogramme')
+            plt.tight_layout()
+            plt.savefig(DOSSIER_SAVE + 'ex' + str(compteur) + '_histogramme', dpi=100)
             plt.show()
 
         # histogram is the feature vector
@@ -390,16 +391,18 @@ def fonction_filtres(liste_images, labels):
 
         ## Réduction de dimension
         # PCA
-        pca = RandomizedPCA(n_components=2)
-        data = pca.fit_transform(data)
+        #pca = RandomizedPCA(n_components=2)
+        #data = pca.fit_transform(data)
+        #nom_reducteur = 'pca'
         # Explication de la variance
         #print(pca.explained_variance_ratio_)
 
         # t-SNE
-        #data = TSNE(n_components=2).fit_transform(data, labels)
+        data = TSNE(n_components=2).fit_transform(data, labels)
+        nom_reducteur = 'tsne'
 
         # Affichage en 2D après une décomposition
-        affichage_decomposition(data, labels)
+        affichage_decomposition(data, labels, nom_reducteur, nom_filtre)
 
         # Séparation des datasets testing/training
         train_x, test_x, train_y, test_y = train_test_split(data,
@@ -436,7 +439,7 @@ def fonction_filtres(liste_images, labels):
             res = gestion_erreur(res, test_y, labels, 'kmeans')
         calcul_resultats(res, test_y, 'kmeans', nom_filtre)
 
-def affichage_decomposition(data, labels):
+def affichage_decomposition(data, labels, nom_reducteur, nom_filtre):
     """
     Affichage en 2D de la décomposition"
     """
@@ -458,7 +461,8 @@ def affichage_decomposition(data, labels):
     axe = fig.add_subplot(1, 1, 1)
     axe.set_xlabel('Principal Component 1', fontsize=15)
     axe.set_ylabel('Principal Component 2', fontsize=15)
-    axe.set_title('PCA components', fontsize=20)
+    title = nom_reducteur + '_components'
+    axe.set_title(title, fontsize=20)
 
     # Création de la liste des couleurs
     colors = matplotlib.cm.rainbow(np.linspace(0, 1, len(targets)))
@@ -473,6 +477,8 @@ def affichage_decomposition(data, labels):
 
     axe.legend(targets)
     axe.grid()
+    plt.tight_layout()
+    plt.savefig(DOSSIER_SAVE + nom_reducteur + '_' + nom_filtre, dpi=100)
     plt.show()
 
 def main(choix):
