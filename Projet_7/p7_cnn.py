@@ -23,6 +23,7 @@ import cv2
 # Lieu où se trouvent des images
 DOSSIER_SOURCE = '/home/toni/Bureau/p7/flow/'
 IMG_DIR = '/home/toni/Bureau/p7/Images/'
+DOSSIER_SAVE = '/home/toni/python/python/Projet_7/images/'
 
 # Définitions des limites d'execution
 NB_RACES = 5
@@ -168,6 +169,9 @@ def cnn_courbes(resultat):
     plt.xlabel('Epochs ', fontsize=16)
     plt.ylabel('Loss', fontsize=16)
     plt.title('Loss Curves', fontsize=16)
+    plt.tight_layout()
+    plt.savefig(DOSSIER_SAVE + 'courbe_loss', dpi=100)
+    plt.show()
 
     # Accuracy Curves
     plt.figure(figsize=[8, 6])
@@ -177,6 +181,9 @@ def cnn_courbes(resultat):
     plt.xlabel('Epochs ', fontsize=16)
     plt.ylabel('Accuracy', fontsize=16)
     plt.title('Accuracy Curves', fontsize=16)
+    plt.tight_layout()
+    plt.savefig(DOSSIER_SAVE + 'courbe_accuracy', dpi=100)
+    plt.show()
 
 def gestion_erreur(res, test_y, labels, classifieur):
     """
@@ -246,7 +253,6 @@ def cnn_etablir_liste_chiens():
                     cpt_exemple = cpt_exemple+1
 
                     # Chemin complet de l'image
-                    #liste_images.append(DOSSIER_SOURCE + dirs + '/' + filename)
                     liste_images.append(filename)
 
                     # Rajout du label
@@ -382,6 +388,6 @@ def main():
 #        original = load_img('{}/{}'.format(DOSSIER_SOURCE, fnames[errors[i]]))
 #        plt.imshow(original)
 #        plt.show()
-    # Affichage du temps d execution
 
+    # Affichage du temps d execution
     print("Temps d execution : %s secondes ---" % (time.time() - start_time))
