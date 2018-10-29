@@ -26,7 +26,7 @@ IMG_DIR = '/home/toni/Bureau/p7/Images/'
 DOSSIER_SAVE = '/home/toni/python/python/Projet_7/images/'
 
 # Définitions des limites d'execution
-NB_RACES = 5
+NB_RACES = 10
 NB_EXEMPLES = 300
 T_IMG = 224
 BATCH_SIZE = 32
@@ -148,8 +148,8 @@ def cnn_appel_vgg(x_train, y_train, x_valid, y_valid, liste_train, liste_test):
                         validation_data=(x_valid, y_valid),
                         verbose=1)
 
-        # Dump (sauvegarde)
-        joblib.dump(res, IMG_DIR + 'savefit.pkl')
+    # Dump (sauvegarde)
+    joblib.dump(model, DOSSIER_SAVE + 'savefit.pkl')
 
     # Tracé de courbes pour visualiser les résultats
     cnn_courbes(res)
@@ -234,7 +234,6 @@ def cnn_etablir_liste_chiens():
 
     # Création de la liste aléatoire des races
     liste_chiens = os.listdir(IMG_DIR)
-    #liste_chiens = [x for x in liste_chiens if "." not in x]
 
     for i in range(0, NB_RACES):
         nb_alea = random.randrange(0, len(liste_chiens))
@@ -312,7 +311,7 @@ def cnn_recup_images():
         # Rajout des données dans la liste
         x_test.append(cv2.resize(img, (T_IMG, T_IMG)))
 
-    return liste_train, liste_test, x_train, y_train, x_test
+    return liste_train, liste_test, x_train, y_train, x_test, one_hot
 
 def main():
     """
@@ -322,7 +321,7 @@ def main():
     # Debut du decompte du temps
     start_time = time.time()
 
-    liste_train, liste_test, x_train, y_train, x_test = cnn_recup_images()
+    liste_train, liste_test, x_train, y_train, x_test, liste_noms = cnn_recup_images()
 
     # Reformatage des listes pour le format de VGG19
     y_train_raw = np.array(y_train, np.uint8)
@@ -355,6 +354,13 @@ def main():
                       predictions,
                       rownames=["Actual"],
                       colnames=["Predicted"])
+
+    # Rajout des noms dans l'index et les colonnes
+    res.index = liste_noms.columns
+    res.columns = liste_noms.columns
+
+    # Sauvegarde des classes
+    liste_noms.to_csv(DOSSIER_SAVE + 'savefit.csv')
 
     # Gestion d'une erreur
     if len(res.columns) != NB_RACES:
@@ -390,4 +396,4 @@ def main():
 #        plt.show()
 
     # Affichage du temps d execution
-    print("Temps d execution : %s secondes ---" % (time.time() - start_time))
+    print("Temps d execution :", round((time.time() - start_time), 2), 'secondes')
